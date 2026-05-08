@@ -2,7 +2,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { FiArrowRight, FiCheck, FiLoader, FiX } from "react-icons/fi";
+import { FiCheck, FiLoader, FiX } from "react-icons/fi";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import {
   AuthError,
   login as loginRequest,
@@ -11,7 +14,6 @@ import {
 import { ToastStack, useToasts, type ToastKind } from "./Toast";
 
 type Mode = "login" | "register";
-
 type ValidationDetail = { field?: string; message?: string };
 
 const PASSWORD_RULES: { test: (pw: string) => boolean; label: string }[] = [
@@ -21,59 +23,41 @@ const PASSWORD_RULES: { test: (pw: string) => boolean; label: string }[] = [
   { test: (p) => /[0-9]/.test(p), label: "One number" },
 ];
 
-function mapAuthError(err: AuthError, mode: Mode): {
-  kind: ToastKind;
-  title: string;
-  message?: string;
-} {
+function mapAuthError(err: AuthError, mode: Mode): { kind: ToastKind; title: string; message?: string } {
   switch (err.code) {
     case "VALIDATION_ERROR": {
       const details = (err.details as ValidationDetail[] | undefined) ?? [];
       const first = details[0];
       if (first?.message) {
-        return {
-          kind: "error",
-          title: first.field ? `Check your ${first.field}` : "Check your details",
-          message: first.message,
-        };
+        return { kind: "error", title: first.field ? `Check your ${first.field}` : "Check your details", message: first.message };
       }
       return { kind: "error", title: "Please check the fields and try again." };
     }
     case "EMAIL_IN_USE":
-      return {
-        kind: "warning",
-        title: "Email already registered",
-        message: "Try signing in instead — or use a different email.",
-      };
+      return { kind: "warning", title: "Email already registered", message: "Try signing in instead — or use a different email." };
     case "INVALID_CREDENTIALS":
-      return {
-        kind: "error",
-        title: "Email or password is incorrect",
-        message:
-          mode === "login"
-            ? "Double-check your password. New here? Create an account below."
-            : "Invalid credentials.",
-      };
+      return { kind: "error", title: "Email or password is incorrect", message: mode === "login" ? "Double-check your password. New here? Create an account below." : "Invalid credentials." };
     case "ACCOUNT_LOCKED":
-      return {
-        kind: "warning",
-        title: "Account temporarily locked",
-        message: "Too many failed attempts. Try again in a few minutes.",
-      };
+      return { kind: "warning", title: "Account temporarily locked", message: "Too many failed attempts. Try again in a few minutes." };
     case "TOO_MANY_REQUESTS":
-      return {
-        kind: "warning",
-        title: "Slow down a moment",
-        message: "Too many requests from this device. Try again shortly.",
-      };
+      return { kind: "warning", title: "Slow down a moment", message: "Too many requests from this device. Try again shortly." };
     default:
-      return {
-        kind: "error",
-        title: "Something went wrong",
-        message: err.message || "Please try again.",
-      };
+      return { kind: "error", title: "Something went wrong", message: err.message || "Please try again." };
   }
 }
+
+/* ── Aceternity bottom-gradient hover effect ──────────────────────────── */
+const BottomGradient = () => (
+  <>
+    <span className="absolute inset-x-0 -bottom-px block h-px w-full bg-gradient-to-r from-transparent via-cyan-500 to-transparent opacity-0 transition duration-500 group-hover/btn:opacity-100" />
+    <span className="absolute inset-x-10 -bottom-px mx-auto block h-px w-1/2 bg-gradient-to-r from-transparent via-indigo-500 to-transparent opacity-0 blur-sm transition duration-500 group-hover/btn:opacity-100" />
+  </>
+);
+
+/* ── Field wrapper ──────────────────────────────────────────────────────── */
+const Field = ({ children, className }: { children: React.ReactNode; className?: string }) => (
+  <div className={cn("flex w-full flex-col space-y-2", className)}>{children}</div>
+);
 
 export default function AuthPage() {
   const router = useRouter();
@@ -90,124 +74,88 @@ export default function AuthPage() {
   );
   const passwordValid = passwordStatus.every((s) => s.ok);
 
-  function switchMode(next: Mode) {
-    setMode(next);
-  }
-
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (submitting) return;
-
     if (mode === "register" && !passwordValid) {
-      const missing = passwordStatus.filter((s) => !s.ok).map((s) => s.label);
-      push({
-        kind: "error",
-        title: "Password doesn't meet the requirements",
-        message: missing.join(" · "),
-      });
+      push({ kind: "error", title: "Password requirements not met", message: passwordStatus.filter((s) => !s.ok).map((s) => s.label).join(" · ") });
       return;
     }
-
     setSubmitting(true);
     try {
       if (mode === "register") {
         await registerRequest({ email, name, password });
-        push({
-          kind: "success",
-          title: "Welcome aboard!",
-          message: "Redirecting to your dashboard…",
-          duration: 2000,
-        });
+        push({ kind: "success", title: "Welcome aboard!", message: "Redirecting…", duration: 2000 });
       } else {
         await loginRequest({ email, password });
-        push({
-          kind: "success",
-          title: "Signed in",
-          message: "Taking you to your dashboard…",
-          duration: 2000,
-        });
+        push({ kind: "success", title: "Signed in", message: "Taking you to your dashboard…", duration: 2000 });
       }
       router.push("/dashboard");
     } catch (err) {
-      if (err instanceof AuthError) {
-        push(mapAuthError(err, mode));
-      } else {
-        push({
-          kind: "error",
-          title: "Network error",
-          message:
-            err instanceof Error
-              ? err.message
-              : "Couldn't reach the server. Check your connection and try again.",
-        });
-      }
+      if (err instanceof AuthError) push(mapAuthError(err, mode));
+      else push({ kind: "error", title: "Network error", message: err instanceof Error ? err.message : "Couldn't reach the server." });
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <main className="auth-shell">
-      <div className="ambient-grid" />
-      <section className="auth-copy">
-        <Link className="auth-brand" href="/">
-          <span />
-          ResumeIQ
-        </Link>
-        <h1>Elevate your career with AI.</h1>
-        <p>
-          Join the executive suite. Use mathematical precision and AI-driven
-          insights to craft resumes that land interviews at world-class
-          companies.
-        </p>
-        <div className="auth-stats">
-          <article>
-            <strong>500k+</strong>
-            <span>Resumes Analyzed</span>
-          </article>
-          <article>
-            <strong>94%</strong>
-            <span>Interview Rate</span>
-          </article>
-        </div>
-      </section>
+    <main className="auth-shell-v2">
+      {/* Dark ambient background */}
+      <div className="auth-bg-grid" aria-hidden />
+      <div className="auth-bg-blob auth-bg-blob-1" aria-hidden />
+      <div className="auth-bg-blob auth-bg-blob-2" aria-hidden />
 
-      <section className="auth-card" aria-label="Authentication form">
-        <header>
-          <h1>{mode === "login" ? "Welcome back" : "Create your account"}</h1>
-          <p>
+      {/* ── Reverb-style pill nav ── */}
+      <header className="lp-nav-wrap" style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 30 }}>
+        <nav className="lp-nav">
+          <Link className="lp-brand" href="/">
+            <span className="lp-brand-icon" aria-hidden>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+              </svg>
+            </span>
+            ResumeIQ
+          </Link>
+          <div className="lp-nav-center" />
+          <div className="lp-nav-right">
+            <Link href="/auth" className="lp-nav-signin">Sign in</Link>
+            <Link href="/auth" className="lp-nav-get-started">Get started</Link>
+          </div>
+        </nav>
+      </header>
+
+      {/* ── Auth card (Aceternity style) ── */}
+      <section className="auth-card-v2" aria-label="Authentication">
+        {/* Header */}
+        <div className="mb-7">
+          <h2 className="text-2xl font-bold text-white">
+            {mode === "login" ? "Welcome back" : "Create your account"}
+          </h2>
+          <p className="mt-2 text-sm text-neutral-400">
             {mode === "login"
-              ? "Please enter your details to continue"
+              ? "Sign in to your ResumeIQ workspace"
               : "Start building a resume recruiters actually read"}
           </p>
-        </header>
+        </div>
 
-        <div className="auth-tabs" role="tablist" aria-label="Authentication mode">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === "login"}
-            className={mode === "login" ? "active" : ""}
-            onClick={() => switchMode("login")}
-          >
+        {/* Mode toggle tabs */}
+        <div className="auth-tabs-v2" role="tablist">
+          <button type="button" role="tab" aria-selected={mode === "login"} className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>
             Log In
           </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === "register"}
-            className={mode === "register" ? "active" : ""}
-            onClick={() => switchMode("register")}
-          >
+          <button type="button" role="tab" aria-selected={mode === "register"} className={mode === "register" ? "active" : ""} onClick={() => setMode("register")}>
             Sign Up
           </button>
         </div>
 
-        <form onSubmit={onSubmit} noValidate>
+        {/* Form */}
+        <form className="mt-6 space-y-4" onSubmit={onSubmit} noValidate>
           {mode === "register" && (
-            <label>
-              Full Name
-              <input
+            <Field>
+              <Label htmlFor="auth-name">Full Name</Label>
+              <Input
+                id="auth-name"
                 type="text"
                 autoComplete="name"
                 required
@@ -215,11 +163,13 @@ export default function AuthPage() {
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Jane Doe"
               />
-            </label>
+            </Field>
           )}
-          <label>
-            Email Address
-            <input
+
+          <Field>
+            <Label htmlFor="auth-email">Email Address</Label>
+            <Input
+              id="auth-email"
               type="email"
               autoComplete="email"
               required
@@ -227,101 +177,83 @@ export default function AuthPage() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@company.com"
             />
-          </label>
-          <label>
-            <span className="password-label">
-              Password
+          </Field>
+
+          <Field>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="auth-password">Password</Label>
               {mode === "login" && (
-                <Link href="#" onClick={(e) => e.preventDefault()}>
+                <Link href="#" onClick={(e) => e.preventDefault()} className="text-xs text-neutral-400 hover:text-white transition-colors">
                   Forgot password?
                 </Link>
               )}
-            </span>
-            <input
+            </div>
+            <Input
+              id="auth-password"
               type="password"
               autoComplete={mode === "login" ? "current-password" : "new-password"}
               required
               minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder={
-                mode === "register"
-                  ? "8+ chars, upper, lower, number"
-                  : "Your password"
-              }
-              aria-describedby={mode === "register" ? "password-rules" : undefined}
+              placeholder={mode === "register" ? "8+ chars, upper, lower, number" : "Your password"}
             />
-          </label>
+          </Field>
 
+          {/* Password rules */}
           {mode === "register" && password.length > 0 && (
-            <ul id="password-rules" className="password-rules" aria-label="Password requirements">
+            <ul className="password-rules" aria-label="Password requirements">
               {passwordStatus.map((rule) => (
                 <li key={rule.label} className={rule.ok ? "ok" : "pending"}>
-                  {rule.ok ? <FiCheck size={14} /> : <FiX size={14} />}
+                  {rule.ok ? <FiCheck size={13} /> : <FiX size={13} />}
                   <span>{rule.label}</span>
                 </li>
               ))}
             </ul>
           )}
 
+          {/* Submit — Aceternity gradient style */}
           <button
             type="submit"
-            className="auth-submit"
             disabled={submitting}
-            style={{ opacity: submitting ? 0.75 : 1 }}
+            className="group/btn relative mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-br from-zinc-900 to-zinc-800 font-semibold text-white shadow-[0px_1px_0px_0px_#27272a_inset,0px_-1px_0px_0px_#27272a_inset] transition duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
+            style={{ fontSize: "0.95rem" }}
           >
             {submitting ? (
-              <>
-                <FiLoader
-                  size={18}
-                  style={{ animation: "spin 1s linear infinite" }}
-                />
-                Please wait
-              </>
+              <><FiLoader size={17} style={{ animation: "spin 1s linear infinite" }} /> Please wait</>
             ) : (
-              <>
-                {mode === "login" ? "Sign In" : "Create Account"}
-                <FiArrowRight size={18} />
-              </>
+              <>{mode === "login" ? "Sign In" : "Create Account"} →</>
             )}
+            <BottomGradient />
           </button>
         </form>
 
-        <p className="auth-footnote">
+        {/* Divider */}
+        <div className="my-6 h-px w-full bg-gradient-to-r from-transparent via-neutral-700 to-transparent" />
+
+        {/* Footnote */}
+        <p className="text-center text-sm text-neutral-500">
           {mode === "login" ? (
-            <>
-              Don&apos;t have an account?{" "}
-              <Link
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  switchMode("register");
-                }}
-              >
-                Start Your Journey
-              </Link>
+            <>Don&apos;t have an account?{" "}
+              <button type="button" onClick={() => setMode("register")} className="text-neutral-300 underline underline-offset-4 hover:text-white transition-colors">
+                Create one
+              </button>
             </>
           ) : (
-            <>
-              Already have one?{" "}
-              <Link
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  switchMode("login");
-                }}
-              >
+            <>Already have one?{" "}
+              <button type="button" onClick={() => setMode("login")} className="text-neutral-300 underline underline-offset-4 hover:text-white transition-colors">
                 Log in
-              </Link>
+              </button>
             </>
           )}
         </p>
-      </section>
 
-      <div className="engine-status">
-        <span />
-        AI Engine Online
-      </div>
+        {/* AI engine badge */}
+        <div className="mt-6 flex items-center justify-center gap-2 text-xs text-neutral-600">
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_#10b981]" />
+          AI Engine Online
+        </div>
+      </section>
 
       <ToastStack toasts={toasts} onDismiss={dismiss} />
     </main>

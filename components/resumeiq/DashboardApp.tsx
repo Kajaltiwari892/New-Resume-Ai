@@ -12,13 +12,7 @@ import { useRouter } from "next/navigation";
 import { Icon, type IconName } from "./Icon";
 import {
   analyzingMessages,
-  experienceLevels,
-  industries,
-  priorities as priorityOptions,
   questionGroupOrder,
-  resumeTypeCopy,
-  resumeTypes,
-  roles,
   type ResumeSectionKey,
 } from "./data";
 import { ToastStack, useToasts } from "./Toast";
@@ -98,23 +92,11 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
   const [booting, setBooting] = useState(true);
   const [messageIndex, setMessageIndex] = useState(0);
 
-  // ---- onboarding form -------------------------------------------------
-  const [onboardingStep, setOnboardingStep] = useState(1);
+  // ---- onboarding form (simplified: just upload) -----------------------
   const [fullName, setFullName] = useState("");
-  const [jobTitle, setJobTitle] = useState("");
-  const [experienceLevel, setExperienceLevel] =
-    useState<(typeof experienceLevels)[number]>("1-3 yrs");
-  const [industry, setIndustry] = useState(industries[0]);
-  const [targetRole, setTargetRole] = useState("");
-  const [dreamCompanies, setDreamCompanies] = useState<string[]>([]);
-  const [companyInput, setCompanyInput] = useState("");
-  const [careerSwitch, setCareerSwitch] = useState(false);
-  const [previousField, setPreviousField] = useState("");
-  const [resumeType, setResumeType] =
-    useState<(typeof resumeTypes)[number]>("Chronological");
-  const [selectedPriorities, setSelectedPriorities] = useState<string[]>(
-    priorityOptions.slice(0, 4),
-  );
+  const [jobTitle] = useState("");
+  const [targetRole] = useState("");
+  const [dreamCompanies] = useState<string[]>([]);
   const [uploadTab, setUploadTab] = useState<UploadTab>("file");
   const [file, setFile] = useState<File | null>(null);
   const [pastedText, setPastedText] = useState("");
@@ -234,84 +216,47 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
 
   // ---- onboarding actions ---------------------------------------------
 
-  function addCompany() {
-    const name = companyInput.trim();
-    if (!name) return;
-    if (dreamCompanies.includes(name)) {
-      setCompanyInput("");
-      return;
-    }
-    setDreamCompanies((list) => [...list, name]);
-    setCompanyInput("");
-  }
-
-  function removeCompany(name: string) {
-    setDreamCompanies((list) => list.filter((c) => c !== name));
-  }
-
-  function togglePriority(label: string) {
-    setSelectedPriorities((list) =>
-      list.includes(label) ? list.filter((p) => p !== label) : [...list, label],
-    );
-  }
-
-  function goToStep(step: number) {
-    setOnboardingStep(Math.max(1, Math.min(4, step)));
-  }
-
   function validateOnboarding(): string | null {
-    if (!fullName.trim()) return "Please enter your full name.";
-    if (!jobTitle.trim()) return "Please enter your current job title.";
-    if (!targetRole.trim()) return "Tell us what role you're aiming for.";
-    if (uploadTab === "file" && !file) return "Upload a PDF or DOCX, or switch to paste mode.";
+    if (uploadTab === "file" && !file) return "Please upload a PDF or DOCX resume.";
     if (uploadTab === "paste" && pastedText.trim().length < 50)
-      return "Paste a bit more of your resume (min 50 characters).";
+      return "Paste at least 50 characters of your resume.";
     return null;
   }
 
   async function handleAnalyzeFlow() {
     const error = validateOnboarding();
     if (error) {
-      push({ kind: "warning", title: "A few details needed", message: error });
+      push({ kind: "warning", title: "One more thing", message: error });
       return;
     }
     setSubmitting(true);
     try {
-      const profilePayload: Profile = {
-        fullName: fullName.trim(),
-        jobTitle: jobTitle.trim(),
-        experienceLevel,
-        industry,
-        targetRole: targetRole.trim(),
-        dreamCompanies,
-        careerSwitch,
-        previousField: careerSwitch ? previousField.trim() : "",
-        resumeType,
-        priorities: selectedPriorities,
-      };
-
-      const savePromise = saveOnboarding(profilePayload).catch((err) => {
-        push({
-          kind: "warning",
-          title: "Profile didn't save",
-          message: errorMessage(err, "We'll retry on next edit."),
-        });
-      });
+      // Save minimal profile (name from auth user)
+      saveOnboarding({
+        fullName: fullName.trim() || user.name,
+        jobTitle: "",
+        experienceLevel: "1-3 yrs",
+        industry: "Technology",
+        targetRole: "",
+        dreamCompanies: [],
+        careerSwitch: false,
+        previousField: "",
+        resumeType: "Chronological",
+        priorities: [],
+      }).catch(() => { /* non-blocking */ });
 
       let newResume: Resume;
       if (uploadTab === "file" && file) {
         const { resume: created } = await uploadResume(file);
         newResume = created;
       } else {
-        const name = `${jobTitle.trim() || fullName.trim() || "My"} Resume`;
         const { resume: created } = await createResumeFromText({
-          name,
+          name: `${user.name || "My"} Resume`,
           text: pastedText,
         });
         newResume = created;
       }
 
-      await savePromise;
       setResume(newResume);
       resetDerivedData();
       setMode("analyzing");
@@ -322,7 +267,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
         push({
           kind: "success",
           title: "Analysis complete",
-          message: `Overall score: ${result.overallScore}/100`,
+          message: `Your ATS score: ${result.overallScore}/100`,
         });
       }
     } catch (err) {
@@ -561,8 +506,6 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
 
   // ---- derived ---------------------------------------------------------
 
-  const progress = useMemo(() => `${onboardingStep * 25}%`, [onboardingStep]);
-
   const scoreMeta = analysis ? describeScore(analysis.overallScore) : null;
 
   const resumeDisplay: ResumeSections = editing
@@ -617,311 +560,111 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
       <div className="ambient-grid" />
 
       {mode === "onboarding" && (
-        <section className="onboarding-stage" aria-label="ResumeIQ onboarding">
-          <div className="wizard-shell">
-            <aside className="wizard-rail glass-panel">
-              <div className="brand-mark">
-                <span className="brand-glyph">
-                  <Icon name="spark" />
-                </span>
-                <strong>ResumeIQ</strong>
-              </div>
-              {(
-                [
-                  ["Personal Info", "Current identity"],
-                  ["Career Target", "Future goals"],
-                  ["Preferences", "AI configuration"],
-                  ["Upload", "Final step"],
-                ] as const
-              ).map(([title, sub], index) => (
-                <button
-                  type="button"
-                  key={title}
-                  className={`step-link ${onboardingStep === index + 1 ? "active" : ""}`}
-                  onClick={() => goToStep(index + 1)}
-                >
-                  <span>{index + 1}</span>
-                  <b>{title}</b>
-                  <small>{sub}</small>
-                </button>
-              ))}
-              <div className="ai-quote">
-                <Icon name="spark" />
-                <p>
-                  &quot;I&apos;ll help optimize for ATS and highlight your hidden executive
-                  strengths.&quot;
-                </p>
-              </div>
-            </aside>
+        <section className="ob-stage" aria-label="Upload your resume">
+          <div className="ob-card glass-panel">
+            {/* Brand */}
+            <div className="ob-brand">
+              <span className="brand-glyph"><Icon name="spark" /></span>
+              <strong>ResumeIQ</strong>
+            </div>
 
-            <div className="wizard-main glass-panel">
-              <div className="progress-head">
-                <span>Step {onboardingStep} of 4</span>
-                <b>
-                  {["Identity", "Targeting", "Resume preferences", "Completion"][onboardingStep - 1]}
-                </b>
-              </div>
-              <div className="progress-track">
-                <span style={{ width: progress }} />
-              </div>
+            <div className="ob-header">
+              <h1>Analyze your resume with AI</h1>
+              <p>Upload your resume and get an instant ATS score, improvement suggestions, and interview prep.</p>
+            </div>
 
-              {onboardingStep === 1 && (
-                <div className="wizard-content">
-                  <header>
-                    <h1>Tell us about yourself</h1>
-                    <p>
-                      Help us tailor your career strategy by defining your current professional
-                      landscape.
-                    </p>
-                  </header>
-                  <div className="form-grid">
-                    <label>
-                      Full name
-                      <input
-                        value={fullName}
-                        onChange={(e) => setFullName(e.target.value)}
-                        placeholder="e.g. Alexander Sterling"
-                      />
-                    </label>
-                    <label>
-                      Current job title
-                      <input
-                        value={jobTitle}
-                        onChange={(e) => setJobTitle(e.target.value)}
-                        placeholder="e.g. Senior Product Manager"
-                      />
-                    </label>
-                  </div>
-                  <label className="field-label">Experience level</label>
-                  <div className="pill-row">
-                    {experienceLevels.map((item) => (
-                      <button
-                        key={item}
-                        type="button"
-                        className={item === experienceLevel ? "selected" : ""}
-                        onClick={() => setExperienceLevel(item)}
-                      >
-                        {item}
-                      </button>
-                    ))}
-                  </div>
-                  <label className="field-label">Industry sector</label>
-                  <select value={industry} onChange={(e) => setIndustry(e.target.value)}>
-                    {industries.map((item) => (
-                      <option key={item}>{item}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
+            {/* Upload tabs */}
+            <div className="ob-tabs">
+              <button
+                type="button"
+                className={uploadTab === "file" ? "active" : ""}
+                onClick={() => setUploadTab("file")}
+                id="ob-tab-file"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                Upload File
+              </button>
+              <button
+                type="button"
+                className={uploadTab === "paste" ? "active" : ""}
+                onClick={() => setUploadTab("paste")}
+                id="ob-tab-paste"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                Paste Text
+              </button>
+            </div>
 
-              {onboardingStep === 2 && (
-                <div className="wizard-content">
-                  <header>
-                    <h1>Your target role</h1>
-                    <p>Help us understand your career aspirations.</p>
-                  </header>
-                  <label>
-                    What job title are you applying for?
-                    <div className="input-with-icon">
-                      <input
-                        list="roles"
-                        value={targetRole}
-                        onChange={(e) => setTargetRole(e.target.value)}
-                        placeholder="e.g. Senior Product Designer"
-                      />
-                      <Icon name="search" />
-                    </div>
-                    <datalist id="roles">
-                      {roles.map((role) => (
-                        <option key={role} value={role} />
-                      ))}
-                    </datalist>
-                  </label>
-                  <label>
-                    Dream companies
-                    <div className="tag-input">
-                      {dreamCompanies.map((company) => (
-                        <span key={company}>
-                          {company}
-                          <button
-                            type="button"
-                            aria-label={`Remove ${company}`}
-                            onClick={() => removeCompany(company)}
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ))}
-                      <input
-                        value={companyInput}
-                        onChange={(e) => setCompanyInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === ",") {
-                            e.preventDefault();
-                            addCompany();
-                          }
-                        }}
-                        onBlur={addCompany}
-                        placeholder="Add company..."
-                      />
-                    </div>
-                  </label>
-                  <div className="toggle-card">
-                    <div>
-                      <b>Are you switching careers?</b>
-                      <p>We&apos;ll tailor AI suggestions for transferable skills.</p>
-                    </div>
-                    <button
-                      type="button"
-                      aria-pressed={careerSwitch}
-                      className={`switch ${careerSwitch ? "on" : ""}`}
-                      onClick={() => setCareerSwitch((v) => !v)}
-                    >
-                      <span />
-                    </button>
-                  </div>
-                  {careerSwitch && (
-                    <label>
-                      From what field?
-                      <input
-                        value={previousField}
-                        onChange={(e) => setPreviousField(e.target.value)}
-                        placeholder="e.g. Graphic Design or Marketing"
-                      />
-                    </label>
-                  )}
-                  <div className="insight-card">
-                    <Icon name="brain" />
-                    <div>
-                      <b>AI Concierge Insight</b>
-                      <p>
-                        Targeting senior roles requires emphasizing leadership outcomes. We&apos;ll
-                        extract these signals from your history in the next step.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {onboardingStep === 3 && (
-                <div className="wizard-content wide">
-                  <header>
-                    <h1>Resume preferences</h1>
-                    <p>What aspects of your resume should our AI prioritize?</p>
-                  </header>
-                  <label className="field-label">Select resume type</label>
-                  <div className="type-grid">
-                    {resumeTypes.map((type) => (
-                      <button
-                        key={type}
-                        type="button"
-                        className={resumeType === type ? "active" : ""}
-                        onClick={() => setResumeType(type)}
-                      >
-                        <Icon name={resumeTypeCopy[type].icon} />
-                        <span />
-                        <b>{type}</b>
-                        <p>{resumeTypeCopy[type].blurb}</p>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="priority-box">
-                    <h2>
-                      <Icon name="brain" /> AI Analysis Priorities
-                    </h2>
-                    <div className="check-grid">
-                      {priorityOptions.map((priority) => (
-                        <label key={priority}>
-                          <input
-                            type="checkbox"
-                            checked={selectedPriorities.includes(priority)}
-                            onChange={() => togglePriority(priority)}
-                          />
-                          <span>{priority}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {onboardingStep === 4 && (
-                <div className="wizard-content upload-step">
-                  <header>
-                    <h1>Upload your Resume</h1>
-                    <p>The final step to unlocking your AI-powered career strategy.</p>
-                  </header>
-                  <div className="upload-tabs">
-                    <button
-                      type="button"
-                      className={uploadTab === "file" ? "active" : ""}
-                      onClick={() => setUploadTab("file")}
-                    >
-                      Upload file
-                    </button>
-                    <button
-                      type="button"
-                      className={uploadTab === "paste" ? "active" : ""}
-                      onClick={() => setUploadTab("paste")}
-                    >
-                      Paste resume text
-                    </button>
-                  </div>
-                  {uploadTab === "file" ? (
-                    <label className="drop-zone">
-                      <Icon name="upload" />
-                      <b>{file ? file.name : "Drag & drop your resume here"}</b>
-                      <span>Supported formats: PDF, DOCX. Max 5MB.</span>
-                      <input
-                        type="file"
-                        accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                        onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                          const picked = e.target.files?.[0] || null;
-                          setFile(picked);
-                        }}
-                      />
-                      <em>{file ? "Change File" : "Browse Files"}</em>
-                    </label>
+            {/* Upload area */}
+            {uploadTab === "file" ? (
+              <label className="ob-dropzone" htmlFor="ob-file-input">
+                <input
+                  id="ob-file-input"
+                  type="file"
+                  accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setFile(e.target.files?.[0] || null)}
+                />
+                <div className="ob-dropzone-inner">
+                  {file ? (
+                    <>
+                      <span className="ob-file-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                      </span>
+                      <b className="ob-file-name">{file.name}</b>
+                      <small className="ob-file-meta">{(file.size / 1024).toFixed(0)} KB · Click to change</small>
+                    </>
                   ) : (
-                    <textarea
-                      className="paste-area"
-                      value={pastedText}
-                      onChange={(e) => setPastedText(e.target.value)}
-                      placeholder="Paste your full resume text here..."
-                      rows={12}
-                    />
+                    <>
+                      <span className="ob-upload-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                      </span>
+                      <b>Drop your resume here</b>
+                      <small>PDF or DOCX · Max 5 MB</small>
+                      <span className="ob-browse-btn">Browse Files</span>
+                    </>
                   )}
                 </div>
-              )}
+              </label>
+            ) : (
+              <textarea
+                className="ob-paste-area"
+                value={pastedText}
+                onChange={(e) => setPastedText(e.target.value)}
+                placeholder="Paste your full resume text here…"
+                rows={10}
+                aria-label="Resume text"
+              />
+            )}
 
-              <footer className="wizard-actions">
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={() => goToStep(onboardingStep - 1)}
-                  disabled={submitting || onboardingStep === 1}
-                >
-                  Back
-                </button>
-                {onboardingStep < 4 ? (
-                  <button
-                    type="button"
-                    className="primary-button"
-                    onClick={() => goToStep(onboardingStep + 1)}
-                  >
-                    Next Step <Icon name="arrow" />
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="primary-button wide-cta"
-                    onClick={handleAnalyzeFlow}
-                    disabled={submitting}
-                  >
-                    {submitting ? "Uploading…" : "Analyze My Resume"} <Icon name="arrow" />
-                  </button>
-                )}
-              </footer>
+            {/* Supported formats hint */}
+            <p className="ob-hint">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              Your data is never stored beyond the session. Supports PDF and DOCX.
+            </p>
+
+            {/* CTA */}
+            <button
+              type="button"
+              className="ob-analyze-btn"
+              onClick={handleAnalyzeFlow}
+              disabled={submitting}
+              id="ob-analyze-btn"
+            >
+              {submitting ? (
+                <><span className="ob-spinner" aria-hidden /> Uploading…</>
+              ) : (
+                <>
+                  Analyze My Resume
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                </>
+              )}
+            </button>
+
+            {/* Trust signals */}
+            <div className="ob-trust">
+              <span>🔒 Secure upload</span>
+              <span>⚡ Results in ~10 sec</span>
+              <span>🎯 ATS-verified scoring</span>
             </div>
           </div>
         </section>

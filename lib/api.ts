@@ -15,7 +15,24 @@ export class ApiError extends Error {
   }
 }
 
+// ── Access-token in-memory store with sessionStorage persistence ─────────────
+// sessionStorage is tab-scoped (cleared when the tab closes) and is NOT
+// accessible from other origins, so it is safe for a short-lived JWT.
+// The refresh token cookie (HttpOnly, 30 d) handles true long-term sessions;
+// we only cache the access token here so that hard-refreshes don't force a
+// network round-trip before the page renders.
+const SESSION_KEY = "riq_at";
+
 let accessToken: string | null = null;
+
+// Hydrate from sessionStorage synchronously on module load (runs in browser only).
+if (typeof window !== "undefined") {
+  try {
+    accessToken = sessionStorage.getItem(SESSION_KEY) || null;
+  } catch {
+    /* private-browsing mode may block sessionStorage */
+  }
+}
 
 export function getAccessToken() {
   return accessToken;
@@ -23,6 +40,17 @@ export function getAccessToken() {
 
 export function setAccessToken(token: string | null) {
   accessToken = token;
+  if (typeof window !== "undefined") {
+    try {
+      if (token) {
+        sessionStorage.setItem(SESSION_KEY, token);
+      } else {
+        sessionStorage.removeItem(SESSION_KEY);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 type ApiInit = Omit<RequestInit, "body"> & {
