@@ -103,72 +103,229 @@ export function analyzeResumeHeuristic(text, { targetRole } = {}) {
 
 export function generateSuggestionsHeuristic(resume) {
   const out = [];
+  const seen = new Set();
+  const push = (s) => {
+    const key = `${s.section}::${s.old.trim().slice(0, 80)}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(s);
+  };
+
   const exp = resume.sections.experience || "";
   const summary = resume.sections.summary || "";
   const skills = resume.sections.skills || "";
+  const education = resume.sections.education || "";
 
-  // Experience — weak phrases
-  const weakPhrases = [
+  // ---- Experience: per-line scan ---------------------------------------
+  const expLines = exp.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+
+  const weakVerbRules = [
     {
-      match: /worked on ([^.\n]+)/i,
-      rewrite: (m) =>
-        `Led ${m[1].trim()} and delivered measurable outcomes for the business.`,
+      re: /\bworked on\s+([^.\n]+)/i,
+      rewrite: (m, line) =>
+        line.replace(m[0], `Led ${m[1].trim()}`) + (/\d/.test(line) ? "" : " — quantify the outcome (%, $, users, time)."),
     },
     {
-      match: /helped (?:with )?([^.\n]+)/i,
-      rewrite: (m) => `Partnered on ${m[1].trim()} — drove the decisions that shipped.`,
+      re: /\bhelped (?:with\s+)?([^.\n]+)/i,
+      rewrite: (m, line) =>
+        line.replace(m[0], `Drove ${m[1].trim()}`) + (/\d/.test(line) ? "" : " — name what shipped and the measurable impact."),
     },
     {
-      match: /(responsible for [^.\n]+)/i,
-      rewrite: (m) =>
-        `Owned ${m[1].replace(/responsible for\s*/i, "").trim()} end-to-end.`,
+      re: /\bresponsible for\s+([^.\n]+)/i,
+      rewrite: (m, line) => line.replace(m[0], `Owned ${m[1].trim()} end-to-end`),
+    },
+    {
+      re: /\bassisted (?:in|with)?\s*([^.\n]+)/i,
+      rewrite: (m, line) =>
+        line.replace(m[0], `Partnered on ${m[1].trim()}`) + " — call out the part you led.",
+    },
+    {
+      re: /\bparticipated in\s+([^.\n]+)/i,
+      rewrite: (m, line) => line.replace(m[0], `Contributed to ${m[1].trim()}`) + " — be specific about your contribution.",
+    },
+    {
+      re: /\bin charge of\s+([^.\n]+)/i,
+      rewrite: (m, line) => line.replace(m[0], `Led ${m[1].trim()}`),
+    },
+    {
+      re: /\b(?:was|am)\s+(?:tasked with|involved in)\s+([^.\n]+)/i,
+      rewrite: (m, line) => line.replace(m[0], `Delivered ${m[1].trim()}`),
+    },
+    {
+      re: /\bduties included\b\s*([^.\n]+)?/i,
+      rewrite: (m, line) =>
+        line.replace(m[0], `Drove ${(m[1] || "").trim()}`).trim() + " — frame as outcomes, not duties.",
     },
   ];
-  for (const { match, rewrite } of weakPhrases) {
-    const m = exp.match(match);
-    if (m) {
-      out.push({
+
+  // Passive voice — "was/were ___ed by ___"
+  const passiveRe = /\b(was|were)\s+(\w+ed)\s+by\s+([^.,\n]+)/i;
+
+  // Buzzwords
+  const buzzwordRe = /\b(team player|hard[- ]?working|detail[- ]?oriented|go[- ]?getter|synergy|results[- ]?driven|self[- ]?starter|think outside the box|out of the box|guru|rockstar|ninja|wheelhouse)\b/gi;
+
+  for (const line of expLines) {
+    if (out.length >= 8) break;
+
+    // Weak verbs
+    for (const { re, rewrite } of weakVerbRules) {
+      const m = line.match(re);
+      if (m) {
+        push({ section: "experience", old: line, next: rewrite(m, line) });
+        break;
+      }
+    }
+
+    // Passive voice
+    const pm = line.match(passiveRe);
+    if (pm) {
+      const next = line.replace(passiveRe, (_all, _be, verb, agent) => `${agent.trim()} ${verb}`);
+      push({
         section: "experience",
-        old: m[0],
-        next: rewrite(m),
+        old: line,
+        next: next.replace(/^\w/, (c) => c.toUpperCase()) + " — active voice puts you as the doer.",
       });
     }
-    if (out.length >= 3) break;
+
+    // Missing metric in a substantive bullet
+    if (
+      line.length > 30 &&
+      /^[\s•\-*\d.]*[A-Za-z]/.test(line) &&
+      !/\d/.test(line) &&
+      !/(summary|experience|skills|education)/i.test(line)
+    ) {
+      push({
+        section: "experience",
+        old: line,
+        next:
+          line.replace(/[.\s]+$/, "") +
+          " — add a metric (e.g. 30% improvement, 2x faster, 1M users, $250K saved).",
+      });
+    }
+
+    // Buzzwords inside experience
+    if (buzzwordRe.test(line)) {
+      buzzwordRe.lastIndex = 0;
+      push({
+        section: "experience",
+        old: line,
+        next: line.replace(buzzwordRe, "[replace with a concrete behavior + outcome]"),
+      });
+    }
+    buzzwordRe.lastIndex = 0;
   }
 
-  // Summary — if it reads generically
-  if (summary && /experienced|passionate|hard[- ]working|team player/i.test(summary)) {
-    out.push({
+  // ---- Summary ---------------------------------------------------------
+  if (summary) {
+    const wc = wordCount(summary);
+    const trimmed = summary.trim();
+    if (/(experienced|passionate|hard[- ]?working|team player|motivated|results[- ]?driven|self[- ]?starter)/i.test(trimmed)) {
+      push({
+        section: "summary",
+        old: trimmed.slice(0, 200),
+        next:
+          "Replace generic adjectives with one sharp positioning line: role + scope + the outcome you're known for. Example: \"Senior product engineer who shipped 3 zero-to-one launches and grew weekly active users 4×.\"",
+      });
+    }
+    if (wc < 18) {
+      push({
+        section: "summary",
+        old: trimmed,
+        next:
+          (trimmed || "Add a 2–3 sentence summary") +
+          " — expand to 30–60 words: who you are, scope of impact, one signature accomplishment.",
+      });
+    } else if (wc > 90) {
+      push({
+        section: "summary",
+        old: trimmed.slice(0, 200),
+        next: "Tighten to 30–60 words. A summary is a hook, not a bio — cut adjectives, keep the highest-leverage facts.",
+      });
+    }
+    if (!/\d/.test(trimmed) && wc >= 18) {
+      push({
+        section: "summary",
+        old: trimmed.slice(0, 200),
+        next: "Bake one specific number into the summary (years, scale, %, $, users) so a recruiter has something concrete to anchor on.",
+      });
+    }
+  } else {
+    push({
       section: "summary",
-      old: summary.slice(0, 140),
-      next:
-        "Product-minded engineer/designer turning complex problems into measurable outcomes — ship velocity, retention, and revenue.",
+      old: "",
+      next: "Add a 2–3 sentence summary at the top: role, scope, and one quantified accomplishment that frames the rest of your resume.",
     });
   }
 
-  // Skills — repetition
-  const skillTokens = skills.split(/[,\n]/).map((s) => s.trim()).filter(Boolean);
-  const dupes = skillTokens.filter((t, i) => skillTokens.indexOf(t) !== i);
-  if (dupes.length) {
-    out.push({
+  // ---- Skills ----------------------------------------------------------
+  if (skills) {
+    const skillTokens = skills.split(/[,\n;|]/).map((s) => s.trim()).filter(Boolean);
+    const dupes = skillTokens.filter((t, i) => skillTokens.findIndex((x) => x.toLowerCase() === t.toLowerCase()) !== i);
+    if (dupes.length) {
+      const deduped = [];
+      const seenLower = new Set();
+      for (const t of skillTokens) {
+        const k = t.toLowerCase();
+        if (!seenLower.has(k)) {
+          seenLower.add(k);
+          deduped.push(t);
+        }
+      }
+      push({
+        section: "skills",
+        old: skills,
+        next: deduped.join(", "),
+      });
+    }
+    if (skillTokens.length < 6) {
+      push({
+        section: "skills",
+        old: skills,
+        next:
+          (skills.replace(/[.\s]+$/, "") || "[your skills]") +
+          " — list 8–15 skills grouped (e.g. Languages, Frameworks, Tools, Cloud) so ATS keyword matching has something to grab.",
+      });
+    }
+    if (skillTokens.length > 25) {
+      push({
+        section: "skills",
+        old: skills,
+        next: "Trim to your top 12–18 skills. A long unfiltered list signals lack of focus and dilutes keyword weight.",
+      });
+    }
+  } else {
+    push({
       section: "skills",
-      old: skills,
-      next: Array.from(new Set(skillTokens)).join(", "),
+      old: "",
+      next: "Add a Skills section grouped by category (Languages, Frameworks, Tools, Cloud). Aim for 8–15 keywords pulled from the roles you're targeting.",
     });
   }
 
-  // If nothing found, give one generic tightening tip
+  // ---- Education -------------------------------------------------------
+  if (education) {
+    if (!/\b(19|20)\d{2}\b/.test(education)) {
+      push({
+        section: "education",
+        old: education.slice(0, 200),
+        next:
+          education.replace(/[.\s]+$/, "") +
+          " — add graduation year (or expected year) so recruiters can place your experience on a timeline.",
+      });
+    }
+  }
+
+  // ---- Fallback --------------------------------------------------------
   if (out.length === 0 && exp) {
-    out.push({
+    push({
       section: "experience",
-      old: exp.split("\n")[0] || exp.slice(0, 140),
+      old: expLines[0] || exp.slice(0, 140),
       next:
-        (exp.split("\n")[0] || "").replace(/^\w/, (c) => c.toUpperCase()) +
-        " — quantified with a specific metric (e.g. 30% improvement, 2x faster, 1M users).",
+        (expLines[0] || "").replace(/^\w/, (c) => c.toUpperCase()) +
+        " — quantify with a specific metric (e.g. 30% improvement, 2x faster, 1M users).",
     });
   }
 
-  return out.slice(0, 6);
+  return out.slice(0, 10);
 }
 
 const QUESTION_POOL = {
@@ -241,6 +398,141 @@ function extractKeywords(text) {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 25)
     .map(([w]) => w);
+}
+
+// ---- Errors (line-level diagnostics) -----------------------------------
+
+const SECTION_HEADERS = [
+  { key: "summary", re: /^\s*(summary|objective|profile)\b/i },
+  { key: "experience", re: /^\s*(experience|work\s+experience|employment)\b/i },
+  { key: "skills", re: /^\s*(skills|technical\s+skills)\b/i },
+  { key: "education", re: /^\s*(education|academic)\b/i },
+];
+
+const ERROR_RULES = [
+  {
+    re: /\bworked on\b/i,
+    severity: "Moderate",
+    category: "weak-verb",
+    reason: "\"Worked on\" is vague — replace with a stronger active verb (Led, Built, Shipped) and quantify the outcome.",
+  },
+  {
+    re: /\bhelped (?:with )?/i,
+    severity: "Moderate",
+    category: "weak-verb",
+    reason: "\"Helped\" understates your role. State what you actually delivered.",
+  },
+  {
+    re: /\bresponsible for\b/i,
+    severity: "Moderate",
+    category: "weak-verb",
+    reason: "\"Responsible for\" is passive. Lead with an action verb that names the result.",
+  },
+  {
+    re: /\b(was|were)\s+\w+ed\s+by\b/i,
+    severity: "Minor",
+    category: "passive-voice",
+    reason: "Passive voice. Rewrite in active voice with you as the subject.",
+  },
+  {
+    re: /\b(team player|hard[- ]?working|detail[- ]?oriented|go[- ]?getter|synergy|results[- ]?driven)\b/i,
+    severity: "Minor",
+    category: "buzzword",
+    reason: "Generic buzzword. Replace with a concrete behavior backed by an outcome.",
+  },
+  {
+    re: /\b(passionate|motivated)\b/i,
+    severity: "Minor",
+    category: "buzzword",
+    reason: "Vague self-description. Show passion through a specific project or metric instead.",
+  },
+];
+
+function detectSection(line, current) {
+  for (const h of SECTION_HEADERS) {
+    if (h.re.test(line)) return h.key;
+  }
+  return current;
+}
+
+function looksLikeBullet(line) {
+  return /^[\s•\-*\d.]*\S/.test(line) && line.trim().length > 0;
+}
+
+export function findErrorsHeuristic(text) {
+  const lines = (text || "").split(/\r?\n/);
+  const out = [];
+  let section = "experience";
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+    const next = detectSection(line, section);
+    if (next !== section) {
+      section = next;
+      continue; // header itself isn't an error
+    }
+
+    let matched = false;
+    for (const rule of ERROR_RULES) {
+      if (rule.re.test(line)) {
+        out.push({
+          section,
+          line,
+          severity: rule.severity,
+          category: rule.category,
+          reason: rule.reason,
+        });
+        matched = true;
+        break;
+      }
+    }
+
+    // Experience bullet without any digit → missing metric
+    if (
+      !matched &&
+      section === "experience" &&
+      looksLikeBullet(line) &&
+      line.length > 25 &&
+      !/\d/.test(line)
+    ) {
+      out.push({
+        section,
+        line,
+        severity: "Moderate",
+        category: "missing-metric",
+        reason: "No numbers in this bullet. Add a metric (%, $, scale, time saved) to make impact concrete.",
+      });
+    }
+
+    if (out.length >= 12) break;
+  }
+  return out;
+}
+
+export function rewriteErrorHeuristic(error) {
+  const original = error.line || "";
+  switch (error.category) {
+    case "weak-verb": {
+      let next = original
+        .replace(/\bworked on\b/i, "Led")
+        .replace(/\bhelped with\b/i, "Drove")
+        .replace(/\bhelped\b/i, "Drove")
+        .replace(/\bresponsible for\b/i, "Owned");
+      if (!/\d/.test(next)) next += " — delivered measurable impact (add a metric).";
+      return next.replace(/^\w/, (c) => c.toUpperCase());
+    }
+    case "passive-voice":
+      return original.replace(/\b(was|were)\s+(\w+ed)\s+by\s+([^.]+)/i, "$3 $2") + " (active voice).";
+    case "buzzword":
+      return original.replace(
+        /\b(team player|hard[- ]?working|detail[- ]?oriented|go[- ]?getter|synergy|results[- ]?driven|passionate|motivated)\b/gi,
+        "[replace with a concrete example]",
+      );
+    case "missing-metric":
+      return `${original} — add a quantified outcome (e.g. 30% improvement, 2x faster, 1M users).`;
+    default:
+      return `${original} (revise for clarity and impact).`;
+  }
 }
 
 export function matchKeywordsHeuristic(resumeText, jobDescription) {

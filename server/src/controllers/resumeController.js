@@ -1,6 +1,7 @@
 import { Resume } from "../models/Resume.js";
 import { Analysis } from "../models/Analysis.js";
 import { Suggestion } from "../models/Suggestion.js";
+import { ResumeError } from "../models/ResumeError.js";
 import { InterviewQuestion } from "../models/InterviewQuestion.js";
 import { KeywordMatch } from "../models/KeywordMatch.js";
 import { Profile } from "../models/Profile.js";
@@ -12,6 +13,8 @@ import {
   generateSuggestions,
   generateInterviewQuestions,
   matchKeywords,
+  findErrors,
+  rewriteError,
 } from "../services/ai.js";
 import { renderResumePdf } from "../services/pdf.js";
 
@@ -202,6 +205,84 @@ export async function applyAllSuggestions(req, res) {
   resume.rawText = buildRawText(resume.sections);
   await resume.save();
   res.json({ resume, applied: pending.length });
+}
+
+// ---- Errors (line-level diagnostics) -----------------------------------
+
+export async function findErrorsHandler(req, res) {
+  const resume = await loadResume(req);
+  const profile = await Profile.findOne({ userId: req.user._id });
+  const text = resume.rawText || buildRawText(resume.sections);
+  const raw = await findErrors(text, { targetRole: profile?.targetRole });
+
+  // Replace existing un-applied errors; keep applied ones for history.
+  await ResumeError.deleteMany({ resumeId: resume._id, applied: false });
+  const docs = await ResumeError.insertMany(
+    raw.map((e) => ({
+      resumeId: resume._id,
+      userId: req.user._id,
+      section: e.section,
+      line: e.line,
+      severity: e.severity,
+      category: e.category,
+      reason: e.reason,
+    })),
+  );
+  res.status(201).json({ errors: docs });
+}
+
+export async function listErrors(req, res) {
+  const resume = await loadResume(req);
+  const errors = await ResumeError.find({ resumeId: resume._id }).sort({ createdAt: -1 });
+  res.json({ errors });
+}
+
+export async function rewriteErrorHandler(req, res) {
+  const resume = await loadResume(req);
+  const error = await ResumeError.findById(req.params.eid);
+  if (!error || error.resumeId.toString() !== resume._id.toString()) {
+    throw NotFound("NOT_FOUND", "Error not found");
+  }
+  if (error.applied) {
+    return res.json({ error });
+  }
+  const { fix } = await rewriteError(error.toObject(), resume);
+  error.fix = String(fix || "").trim();
+  await error.save();
+  res.json({ error });
+}
+
+async function applyOneError(resume, error) {
+  const fix = error.fix;
+  if (!fix) return false;
+  const current = resume.sections[error.section] || "";
+  const updated = current.includes(error.line)
+    ? current.replace(error.line, fix)
+    : current
+      ? `${current}\n${fix}`
+      : fix;
+  resume.sections[error.section] = updated;
+  error.applied = true;
+  error.appliedAt = new Date();
+  return true;
+}
+
+export async function applyErrorHandler(req, res) {
+  const resume = await loadResume(req);
+  const error = await ResumeError.findById(req.params.eid);
+  if (!error || error.resumeId.toString() !== resume._id.toString()) {
+    throw NotFound("NOT_FOUND", "Error not found");
+  }
+  if (!error.fix) {
+    throw BadRequest("NO_FIX", "Generate a fix before applying. Click \"Get AI fix\" first.");
+  }
+  if (!error.applied) {
+    await applyOneError(resume, error);
+    resume.rawText = buildRawText(resume.sections);
+    await resume.save();
+    await error.save();
+  }
+  res.json({ resume, error });
 }
 
 export async function generateInterviewHandler(req, res) {

@@ -4,6 +4,8 @@ import {
   generateSuggestionsHeuristic,
   generateInterviewQuestionsHeuristic,
   matchKeywordsHeuristic,
+  findErrorsHeuristic,
+  rewriteErrorHeuristic,
 } from "./heuristics.js";
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
@@ -152,6 +154,81 @@ export async function generateInterviewQuestions(text, opts = {}) {
   } catch (e) {
     console.warn("[ai] interview fallback:", e.message);
     return generateInterviewQuestionsHeuristic(text, opts);
+  }
+}
+
+export async function findErrors(text, opts = {}) {
+  if (!hasKey()) return findErrorsHeuristic(text, opts);
+  try {
+    const schema = {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          section: { type: "string", enum: ["summary", "experience", "skills", "education"] },
+          line: { type: "string" },
+          severity: { type: "string", enum: ["Critical", "Moderate", "Minor"] },
+          category: {
+            type: "string",
+            enum: [
+              "grammar",
+              "weak-verb",
+              "missing-metric",
+              "passive-voice",
+              "buzzword",
+              "formatting",
+              "other",
+            ],
+          },
+          reason: { type: "string" },
+        },
+        required: ["section", "line", "severity", "category", "reason"],
+      },
+    };
+    return await callGeminiJson({
+      system:
+        "You are a meticulous resume line editor. Find concrete, line-level errors in the resume — " +
+        "weak verbs, passive voice, buzzwords, missing metrics, grammar/typos, formatting issues. " +
+        "Quote the offending text EXACTLY in `line` so it can be string-matched in the source. " +
+        "Each issue must include severity (Critical | Moderate | Minor), a category, and a 1–2 sentence reason. " +
+        "Return between 3 and 12 items, focused on the most impactful problems.",
+      user: `Target role: ${opts.targetRole || "(unspecified)"}\n\nResume text:\n${text}`,
+      schema,
+      maxOutputTokens: 2400,
+    });
+  } catch (e) {
+    console.warn("[ai] findErrors fallback:", e.message);
+    return findErrorsHeuristic(text, opts);
+  }
+}
+
+export async function rewriteError(error, resume) {
+  if (!hasKey()) return { fix: rewriteErrorHeuristic(error) };
+  try {
+    const schema = {
+      type: "object",
+      properties: { fix: { type: "string" } },
+      required: ["fix"],
+    };
+    const sectionText = resume?.sections?.[error.section] || "";
+    return await callGeminiJson({
+      system:
+        "You rewrite a single offending resume line into a sharper, metric-driven, active-voice replacement. " +
+        "Return ONLY the replacement text in `fix` — no quotes, no explanation, no labels. " +
+        "Keep it concise (under 240 chars) and preserve any factual content from the original.",
+      user:
+        `Section: ${error.section}\n` +
+        `Category: ${error.category}\n` +
+        `Severity: ${error.severity}\n` +
+        `Why it's wrong: ${error.reason}\n\n` +
+        `Offending line:\n${error.line}\n\n` +
+        `Surrounding ${error.section} for context:\n${sectionText.slice(0, 1200)}`,
+      schema,
+      maxOutputTokens: 400,
+    });
+  } catch (e) {
+    console.warn("[ai] rewriteError fallback:", e.message);
+    return { fix: rewriteErrorHeuristic(error) };
   }
 }
 

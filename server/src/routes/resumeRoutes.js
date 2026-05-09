@@ -18,6 +18,10 @@ import {
   listSuggestions,
   applySuggestion,
   applyAllSuggestions,
+  findErrorsHandler,
+  listErrors,
+  rewriteErrorHandler,
+  applyErrorHandler,
   generateInterviewHandler,
   listInterviewQuestions,
   matchKeywordsHandler,
@@ -64,6 +68,11 @@ router.post("/:id/suggestions", aiLimiter, asyncHandler(generateSuggestionsHandl
 router.get("/:id/suggestions", asyncHandler(listSuggestions));
 router.post("/:id/suggestions/:sid/apply", asyncHandler(applySuggestion));
 router.post("/:id/suggestions/apply-all", asyncHandler(applyAllSuggestions));
+
+router.post("/:id/errors", aiLimiter, asyncHandler(findErrorsHandler));
+router.get("/:id/errors", asyncHandler(listErrors));
+router.post("/:id/errors/:eid/rewrite", aiLimiter, asyncHandler(rewriteErrorHandler));
+router.post("/:id/errors/:eid/apply", asyncHandler(applyErrorHandler));
 
 router.post("/:id/interview", aiLimiter, asyncHandler(generateInterviewHandler));
 router.get("/:id/interview", asyncHandler(listInterviewQuestions));

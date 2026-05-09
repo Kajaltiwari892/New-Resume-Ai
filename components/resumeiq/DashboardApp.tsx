@@ -8,6 +8,7 @@ import {
   useState,
   type ChangeEvent,
 } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   FiClock,
@@ -15,9 +16,11 @@ import {
   FiGrid,
   FiHelpCircle,
   FiLogOut,
+  FiMenu,
   FiMessageSquare,
   FiSearch,
   FiSettings,
+  FiX,
   FiZap,
 } from "react-icons/fi";
 import { FileSearch } from "lucide-react";
@@ -33,9 +36,11 @@ import { logout, type PublicUser } from "@/lib/authClient";
 import {
   analyzeResume,
   applyAllSuggestions as applyAllSuggestionsApi,
+  applyErrorFix as applyErrorFixApi,
   applySuggestion as applySuggestionApi,
   createResumeFromText,
   downloadResumePdf,
+  findErrors as findErrorsApi,
   generateInterviewQuestions as generateInterviewQuestionsApi,
   generateSuggestions as generateSuggestionsApi,
   getAnalysis,
@@ -43,6 +48,7 @@ import {
   listResumes,
   matchKeywords as matchKeywordsApi,
   patchResume,
+  rewriteError as rewriteErrorApi,
   uploadResume,
   type Analysis,
   type ExportOptions,
@@ -50,13 +56,14 @@ import {
   type KeywordMatch,
   type Profile,
   type Resume,
+  type ResumeErrorRecord,
   type ResumeSections,
   type Suggestion,
 } from "@/lib/resumeClient";
 
 type Mode = "upload" | "analyzing" | "dashboard";
 type UploadTab = "file" | "paste";
-type TabKey = "Score" | "Suggestions" | "Interview" | "Keywords";
+type TabKey = "Score" | "Errors" | "Suggestions" | "Interview" | "Keywords";
 
 const BAR_ICON_BY_KEY: Record<string, IconName> = {
   ats: "target",
@@ -94,6 +101,41 @@ function errorMessage(err: unknown, fallback: string) {
   return fallback;
 }
 
+function AutoResizeTextarea({
+  value,
+  onChange,
+  onBlur,
+  autoFocus,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onBlur?: () => void;
+  autoFocus?: boolean;
+  placeholder?: string;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+  return (
+    <textarea
+      ref={ref}
+      className="resume-editor"
+      value={value}
+      placeholder={placeholder}
+      onChange={(e) => onChange(e.target.value)}
+      onBlur={onBlur}
+      autoFocus={autoFocus}
+      spellCheck
+      rows={3}
+    />
+  );
+}
+
 export default function DashboardApp({ user }: { user: PublicUser }) {
   const router = useRouter();
   const { toasts, push, dismiss } = useToasts();
@@ -101,6 +143,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
   // ---- boot + mode -----------------------------------------------------
   const [mode, setMode] = useState<Mode>("upload");
   const [booting, setBooting] = useState(true);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [messageIndex, setMessageIndex] = useState(0);
 
   // ---- profile snapshot (read-only here; editing lives in /onboarding) -
@@ -119,6 +162,11 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [suggestionsLoaded, setSuggestionsLoaded] = useState(false);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [resumeErrors, setResumeErrors] = useState<ResumeErrorRecord[]>([]);
+  const [errorsLoaded, setErrorsLoaded] = useState(false);
+  const [errorsLoading, setErrorsLoading] = useState(false);
+  const [rewritingErrorId, setRewritingErrorId] = useState<string | null>(null);
+  const [applyingErrorId, setApplyingErrorId] = useState<string | null>(null);
   const [interviewQuestions, setInterviewQuestions] = useState<InterviewQuestion[]>([]);
   const [interviewLoaded, setInterviewLoaded] = useState(false);
   const [interviewLoading, setInterviewLoading] = useState(false);
@@ -151,6 +199,20 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
     }, 950);
     return () => window.clearInterval(timer);
   }, [mode]);
+
+  // Close mobile drawer on Esc; lock body scroll while open.
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileNavOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [mobileNavOpen]);
 
   // Keep drafts in sync with the loaded resume.
   useEffect(() => {
@@ -356,9 +418,69 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
     }
   }, [resume, interviewLoading, push]);
 
+  const loadErrors = useCallback(async () => {
+    if (!resume || errorsLoading) return;
+    setErrorsLoading(true);
+    try {
+      const { errors } = await findErrorsApi(resume.id);
+      setResumeErrors(errors);
+      setErrorsLoaded(true);
+    } catch (err) {
+      push({
+        kind: "error",
+        title: "Couldn't scan errors",
+        message: errorMessage(err, "Please try again in a moment."),
+      });
+    } finally {
+      setErrorsLoading(false);
+    }
+  }, [resume, errorsLoading, push]);
+
+  async function handleRewriteError(errorId: string) {
+    if (!resume || rewritingErrorId) return;
+    setRewritingErrorId(errorId);
+    try {
+      const { error: next } = await rewriteErrorApi(resume.id, errorId);
+      setResumeErrors((list) => list.map((e) => (e.id === errorId ? next : e)));
+    } catch (err) {
+      push({
+        kind: "error",
+        title: "Couldn't generate fix",
+        message: errorMessage(err, "Please try again."),
+      });
+    } finally {
+      setRewritingErrorId(null);
+    }
+  }
+
+  async function handleApplyError(errorId: string) {
+    if (!resume || applyingErrorId) return;
+    setApplyingErrorId(errorId);
+    try {
+      const { resume: nextResume, error: nextError } = await applyErrorFixApi(
+        resume.id,
+        errorId,
+      );
+      setResume(nextResume);
+      setResumeErrors((list) => list.map((e) => (e.id === errorId ? nextError : e)));
+      push({ kind: "success", title: "Fix applied" });
+    } catch (err) {
+      push({
+        kind: "error",
+        title: "Couldn't apply fix",
+        message: errorMessage(err, "Please try again."),
+      });
+    } finally {
+      setApplyingErrorId(null);
+    }
+  }
+
   // Auto-load tabs the first time they're opened.
   useEffect(() => {
     if (mode !== "dashboard" || !resume) return;
+    if (activeTab === "Errors" && !errorsLoaded && !errorsLoading) {
+      loadErrors();
+    }
     if (activeTab === "Suggestions" && !suggestionsLoaded && !suggestionsLoading) {
       loadSuggestions();
     }
@@ -369,10 +491,13 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
     activeTab,
     mode,
     resume,
+    errorsLoaded,
+    errorsLoading,
     suggestionsLoaded,
     suggestionsLoading,
     interviewLoaded,
     interviewLoading,
+    loadErrors,
     loadSuggestions,
     loadInterview,
   ]);
@@ -682,7 +807,14 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
       )}
 
       {mode === "dashboard" && resume && (
-        <section className="dashboard">
+        <section className={`dashboard ${mobileNavOpen ? "nav-open" : ""}`}>
+          {mobileNavOpen && (
+            <div
+              className="mobile-nav-backdrop"
+              onClick={() => setMobileNavOpen(false)}
+              aria-hidden
+            />
+          )}
           <aside className="sidebar">
             <div className="sidebar-scroll">
               <div className="brand-mark">
@@ -690,21 +822,34 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
                   <FileSearch size={14} strokeWidth={1.8} />
                 </span>
                 <strong>ResumeIQ</strong>
+                <button
+                  type="button"
+                  className="ghost-button mobile-nav-close"
+                  onClick={() => setMobileNavOpen(false)}
+                  aria-label="Close menu"
+                >
+                  <FiX size={16} />
+                </button>
               </div>
               <nav>
                 {(
                   [
-                    [FiGrid, "Dashboard"],
-                    [FiFileText, "My Resumes"],
-                    [FiMessageSquare, "Interview Prep"],
-                    [FiClock, "History"],
-                    [FiSettings, "Settings"],
+                    [FiGrid, "Dashboard", "/dashboard"],
+                    [FiFileText, "My Resumes", "/resumes"],
+                    [FiMessageSquare, "Interview Prep", "/interview"],
+                    [FiClock, "History", "/history"],
+                    [FiSettings, "Settings", "/settings"],
                   ] as const
-                ).map(([NavIcon, label]) => (
-                  <a className={label === "Dashboard" ? "active" : ""} key={label}>
+                ).map(([NavIcon, label, href]) => (
+                  <Link
+                    href={href}
+                    className={label === "Dashboard" ? "active" : ""}
+                    key={label}
+                    onClick={() => setMobileNavOpen(false)}
+                  >
                     <NavIcon size={16} />
                     <span>{label}</span>
-                  </a>
+                  </Link>
                 ))}
               </nav>
               <div className="upgrade-card">
@@ -733,6 +878,14 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
 
           <section className="resume-workbench">
             <div className="topbar">
+              <button
+                type="button"
+                className="ghost-button mobile-nav-toggle"
+                onClick={() => setMobileNavOpen(true)}
+                aria-label="Open menu"
+              >
+                <FiMenu size={18} />
+              </button>
               <div>
                 <small>Live resume editor</small>
                 <h1>{resumeFileName}</h1>
@@ -758,27 +911,46 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
               </header>
 
               {(["experience", "summary", "skills", "education"] as ResumeSectionKey[]).map(
-                (section) => (
+                (section) => {
+                  const isEditing = editing === section;
+                  const sectionDirty =
+                    (sectionDrafts[section] || "") !== (resume.sections[section] || "");
+                  return (
                   <section
                     key={section}
-                    className={`resume-section ${editing === section ? "editing" : ""}`}
-                    onClick={() => setEditing(section)}
+                    className={`resume-section ${isEditing ? "editing" : ""}`}
+                    onClick={() => !isEditing && setEditing(section)}
                   >
+                    <div className="resume-section-head">
+                      <h3>{section}</h3>
+                      <span className="resume-section-status">
+                        {isEditing
+                          ? sectionDirty
+                            ? "Editing • unsaved"
+                            : "Editing"
+                          : sectionDirty
+                            ? "Unsaved"
+                            : ""}
+                      </span>
+                    </div>
                     <div className="floating-toolbar" aria-label={`${section} tools`}>
-                      <button>
+                      <button onClick={(e) => { e.stopPropagation(); setEditing(section); }}>
                         <Icon name="edit" /> Edit
                       </button>
-                      <button>
+                      <button onClick={(e) => { e.stopPropagation(); setActiveTab("Suggestions"); }}>
                         <Icon name="spark" /> Improve
                       </button>
                     </div>
-                    <h3>{section}</h3>
-                    {editing === section ? (
-                      <textarea
+                    {isEditing ? (
+                      <AutoResizeTextarea
                         value={sectionDrafts[section]}
-                        onChange={(e) => onSectionChange(section, e.target.value)}
-                        onBlur={() => setEditing(null)}
+                        onChange={(v) => onSectionChange(section, v)}
+                        onBlur={() => {
+                          setEditing(null);
+                          if (sectionDirty) void handleSave();
+                        }}
                         autoFocus
+                        placeholder={`Add your ${section}…`}
                       />
                     ) : section === "experience" ? (
                       <ul>
@@ -806,7 +978,8 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
                       <p>{resumeDisplay[section] || <em>Click to add {section}.</em>}</p>
                     )}
                   </section>
-                ),
+                  );
+                },
               )}
 
               <button className="download-paper" onClick={() => setDownloadOpen(true)}>
@@ -823,7 +996,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
 
           <aside className="analysis-panel">
             <div className="tabs">
-              {(["Score", "Suggestions", "Interview", "Keywords"] as TabKey[]).map((tab) => (
+              {(["Score", "Errors", "Suggestions", "Interview", "Keywords"] as TabKey[]).map((tab) => (
                 <button
                   key={tab}
                   className={activeTab === tab ? "active" : ""}
@@ -910,6 +1083,96 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
                     </button>
                   </div>
                 )}
+              </div>
+            )}
+
+            {activeTab === "Errors" && (
+              <div className="tab-panel">
+                <div className="errors-head">
+                  <div>
+                    <h2>Line-level errors</h2>
+                    <p className="errors-sub">
+                      Each item is a concrete fix. Click <em>Get AI fix</em>, review, then <em>Apply</em>.
+                    </p>
+                  </div>
+                  <button
+                    className="errors-rescan"
+                    onClick={loadErrors}
+                    disabled={errorsLoading}
+                  >
+                    {errorsLoading ? "Scanning…" : errorsLoaded ? "Re-scan" : "Scan"}
+                  </button>
+                </div>
+
+                {errorsLoading && !resumeErrors.length && (
+                  <div className="empty-panel">
+                    <p>Scanning your resume for errors…</p>
+                  </div>
+                )}
+                {!errorsLoading && errorsLoaded && !resumeErrors.length && (
+                  <div className="win-card">
+                    <Icon name="check" /> No line-level errors found.
+                  </div>
+                )}
+                {resumeErrors.map((error, index) => {
+                  const isRewriting = rewritingErrorId === error.id;
+                  const isApplying = applyingErrorId === error.id;
+                  return (
+                    <div
+                      className={`issue-card error-card ${severityClass(error.severity)} ${error.applied ? "applied" : ""}`}
+                      style={{ "--delay": `${index * 60}ms` } as React.CSSProperties}
+                      key={error.id}
+                    >
+                      <div className="error-head">
+                        <span>{error.severity}</span>
+                        <em className="error-category">{error.category}</em>
+                        <em className="error-section">{error.section}</em>
+                      </div>
+                      <del className="error-line">{error.line}</del>
+                      <p className="error-reason">{error.reason}</p>
+
+                      {error.fix && (
+                        <p className="error-fix">{error.fix}</p>
+                      )}
+
+                      <div className="error-actions">
+                        {!error.applied && !error.fix && (
+                          <button
+                            type="button"
+                            onClick={() => handleRewriteError(error.id)}
+                            disabled={isRewriting}
+                          >
+                            {isRewriting ? "Generating…" : "Get AI fix"}
+                          </button>
+                        )}
+                        {!error.applied && error.fix && (
+                          <>
+                            <button
+                              type="button"
+                              className="primary-button"
+                              onClick={() => handleApplyError(error.id)}
+                              disabled={isApplying}
+                            >
+                              {isApplying ? "Applying…" : "Apply"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRewriteError(error.id)}
+                              disabled={isRewriting}
+                            >
+                              {isRewriting ? "…" : "Regenerate"}
+                            </button>
+                          </>
+                        )}
+                        {error.applied && (
+                          <span className="error-applied-badge">
+                            <Icon name="check" /> Applied
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
 

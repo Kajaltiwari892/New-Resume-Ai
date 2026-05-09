@@ -73,6 +73,28 @@ export type Suggestion = {
   appliedAt?: string | null;
 };
 
+export type ResumeErrorCategory =
+  | "grammar"
+  | "weak-verb"
+  | "missing-metric"
+  | "passive-voice"
+  | "buzzword"
+  | "formatting"
+  | "other";
+
+export type ResumeErrorRecord = {
+  id: string;
+  resumeId: string;
+  section: keyof ResumeSections;
+  line: string;
+  severity: "Critical" | "Moderate" | "Minor";
+  category: ResumeErrorCategory;
+  reason: string;
+  fix: string | null;
+  applied: boolean;
+  appliedAt?: string | null;
+};
+
 export type InterviewQuestion = {
   id: string;
   resumeId: string;
@@ -211,6 +233,35 @@ export function applySuggestion(resumeId: string, suggestionId: string) {
 export function applyAllSuggestions(resumeId: string) {
   return api<{ suggestions: Suggestion[]; resume: Resume }>(
     `/api/resumes/${resumeId}/suggestions/apply-all`,
+    { method: "POST", auth: true },
+  );
+}
+
+// --- Errors (line-level diagnostics) ----------------------------------
+
+export function findErrors(id: string) {
+  return api<{ errors: ResumeErrorRecord[] }>(`/api/resumes/${id}/errors`, {
+    method: "POST",
+    auth: true,
+  });
+}
+
+export function listErrors(id: string) {
+  return api<{ errors: ResumeErrorRecord[] }>(`/api/resumes/${id}/errors`, {
+    auth: true,
+  });
+}
+
+export function rewriteError(resumeId: string, errorId: string) {
+  return api<{ error: ResumeErrorRecord }>(
+    `/api/resumes/${resumeId}/errors/${errorId}/rewrite`,
+    { method: "POST", auth: true },
+  );
+}
+
+export function applyErrorFix(resumeId: string, errorId: string) {
+  return api<{ error: ResumeErrorRecord; resume: Resume }>(
+    `/api/resumes/${resumeId}/errors/${errorId}/apply`,
     { method: "POST", auth: true },
   );
 }
