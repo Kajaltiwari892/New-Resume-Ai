@@ -99,6 +99,7 @@ export type Suggestion = {
   section: keyof ResumeSections;
   old: string;
   next: string;
+  reason?: string;
   applied: boolean;
   appliedAt?: string | null;
 };

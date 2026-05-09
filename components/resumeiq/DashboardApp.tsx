@@ -1196,7 +1196,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
               <div className="tab-panel">
                 {suggestionsLoading && !suggestions.length && (
                   <div className="empty-panel">
-                    <p>Generating suggestions…</p>
+                    <p>Scanning every bullet against FAANG standards…</p>
                   </div>
                 )}
                 {!suggestionsLoading && !suggestions.length && (
@@ -1209,27 +1209,55 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
                 )}
                 {suggestions.length > 0 && (
                   <>
-                    <button
-                      className="apply-all"
-                      onClick={handleApplyAll}
-                      disabled={suggestions.every((s) => s.applied)}
-                    >
-                      Apply All
-                    </button>
+                    <div className="suggestions-header">
+                      <span className="suggestions-count">{suggestions.length} improvements found</span>
+                      <button
+                        className="apply-all"
+                        onClick={handleApplyAll}
+                        disabled={suggestions.every((s) => s.applied)}
+                      >
+                        Apply All
+                      </button>
+                    </div>
                     {suggestions.map((suggestion, index) => (
                       <div
                         className={`suggestion-card ${suggestion.applied ? "applied" : ""}`}
-                        style={{ "--delay": `${index * 70}ms` } as React.CSSProperties}
+                        style={{ "--delay": `${index * 60}ms` } as React.CSSProperties}
                         key={suggestion.id}
                       >
-                        <span>{suggestion.section}</span>
-                        <del>{suggestion.old}</del>
-                        <p>{suggestion.next}</p>
+                        {/* Section badge */}
+                        <div className="suggestion-card-head">
+                          <span className="suggestion-section-badge">{suggestion.section}</span>
+                          {suggestion.applied && (
+                            <span className="suggestion-applied-badge">
+                              <Icon name="check" /> Applied
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Why it was flagged */}
+                        {suggestion.reason && (
+                          <p className="suggestion-reason">⚡ {suggestion.reason}</p>
+                        )}
+
+                        {/* Original (struck out) */}
+                        <div className="suggestion-original">
+                          <span>Original</span>
+                          <del>{suggestion.old}</del>
+                        </div>
+
+                        {/* AI Rewrite */}
+                        <div className="suggestion-rewrite">
+                          <span>Improved</span>
+                          <p>{suggestion.next}</p>
+                        </div>
+
                         <button
+                          className={suggestion.applied ? "" : "primary-button"}
                           onClick={() => handleApply(suggestion.id)}
                           disabled={suggestion.applied}
                         >
-                          {suggestion.applied ? "Applied" : "Apply"}
+                          {suggestion.applied ? "✓ Applied" : "Apply Fix"}
                         </button>
                       </div>
                     ))}

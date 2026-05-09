@@ -6066,6 +6066,163 @@ body:has(.dashboard) {
 
 /* ─── End FAANG Score Panel ─────────────────────────────────────────────── */
 
+/* ─── Rich Suggestion Cards ─────────────────────────────────────────────── */
+.suggestions-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.85rem;
+}
+
+.suggestions-count {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #7C3AED;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.suggestion-card {
+  background: #0f0f0f;
+  border: 1px solid #1f1f1f;
+  border-radius: 10px;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  display: grid;
+  gap: 0.6rem;
+  animation: slideIn 0.3s ease both;
+  animation-delay: var(--delay, 0ms);
+  transition: border-color 0.15s;
+}
+
+.suggestion-card:hover {
+  border-color: #2a2a2a;
+}
+
+.suggestion-card.applied {
+  opacity: 0.55;
+}
+
+.suggestion-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.suggestion-section-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 0.18rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(124, 58, 237, 0.12);
+  color: #a78bfa;
+  border: 1px solid rgba(124, 58, 237, 0.2);
+}
+
+.suggestion-applied-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.72rem;
+  color: #10b981;
+  font-weight: 500;
+}
+
+.suggestion-reason {
+  font-size: 0.78rem;
+  color: #aaa;
+  line-height: 1.5;
+  margin: 0;
+  padding: 0.45rem 0.65rem;
+  background: rgba(245, 158, 11, 0.06);
+  border-left: 2px solid rgba(245, 158, 11, 0.35);
+  border-radius: 0 6px 6px 0;
+  font-style: italic;
+}
+
+.suggestion-original {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.suggestion-original > span,
+.suggestion-rewrite > span {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.suggestion-original > span {
+  color: #ef4444;
+}
+
+.suggestion-original del {
+  display: block;
+  font-size: 0.8rem;
+  color: #fca5a5;
+  text-decoration: line-through;
+  text-decoration-color: rgba(239, 68, 68, 0.5);
+  background: rgba(239, 68, 68, 0.05);
+  border-left: 2px solid rgba(239, 68, 68, 0.3);
+  padding: 0.4rem 0.6rem;
+  border-radius: 0 6px 6px 0;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.suggestion-rewrite {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.suggestion-rewrite > span {
+  color: #10b981;
+}
+
+.suggestion-rewrite > p {
+  font-size: 0.82rem;
+  color: #bbf7d0;
+  background: rgba(16, 185, 129, 0.07);
+  border-left: 2px solid rgba(16, 185, 129, 0.4);
+  padding: 0.4rem 0.6rem;
+  border-radius: 0 6px 6px 0;
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.55;
+}
+
+.suggestion-card button.primary-button {
+  align-self: start;
+  padding: 0.42rem 0.9rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: #fff;
+  color: #000;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.suggestion-card button.primary-button:hover {
+  background: #e5e5e5;
+}
+
+.suggestion-card button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+/* ─── End Rich Suggestion Cards ──────────────────────────────────────────── */
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

@@ -38,8 +38,16 @@ async function callGeminiJson({ system, user, schema, maxOutputTokens = 2048 }) 
   }
   const data = await res.json();
   const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!raw) throw new Error("Gemini: empty response");
-  return JSON.parse(raw);
+  if (!raw) {
+    console.error("[callGeminiJson] empty response, full data:", JSON.stringify(data).slice(0, 500));
+    throw new Error("Gemini: empty response");
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (parseErr) {
+    console.error("[callGeminiJson] JSON parse failed. Raw text:", raw.slice(0, 500));
+    throw parseErr;
+  }
 }
 
 // -------- FAANG-Grade System Prompt -------- //
@@ -343,34 +351,101 @@ function capitalize(str) {
 export async function generateSuggestions(resume, _analysis) {
   if (!hasKey()) return generateSuggestionsHeuristic(resume);
   try {
+    // Gemini requires a root OBJECT schema — top-level arrays return unreliably (often 1 item).
+    // Wrap in { suggestions: [...] } and unwrap after the call.
     const schema = {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          section: { type: "string", enum: ["summary", "experience", "skills", "education"] },
-          old: { type: "string" },
-          next: { type: "string" },
+      type: "object",
+      properties: {
+        suggestions: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              section: { type: "string", enum: ["summary", "experience", "skills", "education"] },
+              old: { type: "string" },
+              next: { type: "string" },
+              reason: { type: "string" },
+            },
+            required: ["section", "old", "next", "reason"],
+          },
         },
-        required: ["section", "old", "next"],
       },
+      required: ["suggestions"],
     };
     const sections = resume.sections;
-    return await callGeminiJson({
-      system:
-        "You are an elite resume coach trained on FAANG hiring standards. " +
-        "Rewrite resume bullets to be sharper, metric-driven, and achievement-focused using strong action verbs. " +
-        "Each suggestion must quote the EXACT original text in `old` and provide a significantly improved replacement in `next`. " +
-        "Focus on: adding quantifiable metrics, replacing weak verbs, strengthening impact statements. " +
-        "Return 5-8 high-impact suggestions.",
-      user:
-        `SUMMARY:\n${sections.summary}\n\nEXPERIENCE:\n${sections.experience}\n\nSKILLS:\n${sections.skills}\n\n` +
-        `Return 5-8 specific, impactful suggestions.`,
+    const systemPrompt = `You are a brutally honest elite resume coach trained on FAANG, McKinsey, and Fortune 500 hiring standards.
+
+Your job: scan EVERY SINGLE bullet point and line of this resume. Return a JSON object with a "suggestions" array containing 10 to 15 items minimum.
+
+CRITERIA — check every bullet against ALL of these:
+
+1. IMPACT: No number (%, $, x faster, N users, N requests, time saved)? → Add a realistic metric.
+   BAD: "Worked on performance optimization, reducing load time significantly"
+   GOOD: "Engineered code splitting and lazy loading pipeline, reducing page load time by 43% (8.2s → 4.7s)"
+
+2. ACTION VERB: Starts with a BANNED weak verb?
+   BANNED: worked, helped, assisted, responsible for, participated, involved, contributed, did, made, handled, supported, used, utilized, tried, learned, gained experience, exposed to, familiar with, knowledge of, aware of
+   → Replace with: Architected, Engineered, Spearheaded, Launched, Drove, Reduced, Optimized, Automated, Refactored, Deployed, Built, Scaled, Streamlined, Accelerated
+
+3. STRUCTURE: Doesn't follow [Strong Verb] + [What] + [How/Tech] + [Result]? → Rewrite to match.
+
+4. PASSIVE VOICE: Uses "was built", "was implemented", "was responsible", "was used"? → Rewrite in active voice.
+
+5. VAGUENESS: Reads like a job description instead of an achievement? → Rewrite as a specific achievement.
+
+6. VERB REPETITION: Multiple bullets start with the same verb? → Suggest alternatives.
+
+7. SUMMARY CLICHÉS: Contains "passionate", "hardworking", "seeking", "looking to", "I am", "team player"? → Rewrite as: [X yrs] + [specialization] + [1-2 metrics] + [value].
+
+8. SKILLS CONTEXT: Skills listed but never demonstrated in experience bullets? → Flag and suggest adding context.
+
+MANDATORY RULES:
+- The "suggestions" array MUST contain at least 10 items. Aim for 12-15.
+- "old": copy the EXACT original text from the resume, word for word.
+- "next": write the COMPLETE improved replacement — a real rewritten sentence, not advice.
+- "reason": name the specific criterion that failed (e.g. "Criterion 1: No metric — 'significantly' is vague").
+- If one bullet fails multiple criteria, include it as one suggestion that fixes all issues.
+- Do NOT skip bullets. Be ruthless — find at least 10 problems.`;
+
+    const userPrompt = `RESUME SECTIONS:
+
+SUMMARY:
+${sections.summary || "(empty)"}
+
+EXPERIENCE:
+${sections.experience || "(empty)"}
+
+SKILLS:
+${sections.skills || "(empty)"}
+
+EDUCATION:
+${sections.education || "(empty)"}
+
+IMPORTANT: Return a JSON object { "suggestions": [...] } with AT LEAST 10 suggestions. Check every bullet point above.`;
+
+    console.log("[ai] generateSuggestions: calling Gemini...");
+    const result = await callGeminiJson({
+      system: systemPrompt,
+      user: userPrompt,
       schema,
-      maxOutputTokens: 2400,
+      maxOutputTokens: 6000,
     });
+
+    console.log("[ai] generateSuggestions raw result type:", typeof result, "isArray:", Array.isArray(result));
+    console.log("[ai] generateSuggestions result keys:", result && typeof result === "object" ? Object.keys(result) : "N/A");
+    console.log("[ai] generateSuggestions suggestions count:", result?.suggestions?.length ?? (Array.isArray(result) ? result.length : "unknown"));
+
+    // Unwrap from root object (Gemini wraps array in object)
+    const items = Array.isArray(result) ? result : (result?.suggestions || []);
+    if (items.length === 0) {
+      console.warn("[ai] generateSuggestions: 0 items returned, falling back");
+      return generateSuggestionsHeuristic(resume);
+    }
+    console.log(`[ai] generateSuggestions: ${items.length} suggestions generated`);
+    return items;
   } catch (e) {
-    console.warn("[ai] suggestions fallback:", e.message);
+    console.error("[ai] suggestions ERROR:", e.message, e.stack?.slice(0, 300));
+    console.warn("[ai] suggestions fallback triggered");
     return generateSuggestionsHeuristic(resume);
   }
 }

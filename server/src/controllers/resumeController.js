@@ -165,6 +165,7 @@ export async function generateSuggestionsHandler(req, res) {
       section: s.section,
       old: s.old,
       next: s.next,
+      reason: s.reason || null,
     })),
   );
   res.status(201).json({ suggestions: docs });

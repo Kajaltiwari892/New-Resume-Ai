@@ -14,6 +14,7 @@ const SuggestionSchema = new Schema(
     },
     old: { type: String, required: true },
     next: { type: String, required: true },
+    reason: { type: String, default: null },
     applied: { type: Boolean, default: false },
     appliedAt: { type: Date, default: null },
   },
