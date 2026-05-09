@@ -33,6 +33,15 @@ router.put(
       .optional()
       .isIn(["Chronological", "Functional", "Hybrid", ""]),
     body("priorities").optional().isArray({ max: 12 }),
+    body("primaryGoal")
+      .optional()
+      .isIn([
+        "Get more interviews",
+        "Switch careers",
+        "Land first job",
+        "Improve resume quality",
+        "",
+      ]),
   ],
   validate,
   asyncHandler(saveOnboarding),

@@ -4,6 +4,11 @@ import { api, API_BASE, getAccessToken } from "./api";
 
 export type ExperienceLevel = "Fresher" | "1-3 yrs" | "3-7 yrs" | "7+ yrs";
 export type ResumeType = "Chronological" | "Functional" | "Hybrid";
+export type PrimaryGoal =
+  | "Get more interviews"
+  | "Switch careers"
+  | "Land first job"
+  | "Improve resume quality";
 
 export type Profile = {
   fullName?: string;
@@ -16,6 +21,8 @@ export type Profile = {
   previousField?: string;
   resumeType?: ResumeType;
   priorities?: string[];
+  primaryGoal?: PrimaryGoal;
+  onboardingCompleted?: boolean;
 };
 
 export type ResumeSections = {

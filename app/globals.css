@@ -567,8 +567,8 @@
   padding: 0.82rem 1.7rem;
   border-radius: 0.75rem;
   background: transparent;
-  border: 1px solid rgba(255,255,255,0.22);
-  color: rgba(255,255,255,0.88);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: rgba(255, 255, 255, 0.88);
   font-size: 0.95rem;
   font-weight: 500;
   text-decoration: none;
@@ -585,12 +585,10 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(
-    115deg,
-    rgba(124,58,237,0.55) 0%,
-    rgba(6,182,212,0.45) 45%,
-    rgba(244,114,182,0.4) 100%
-  );
+  background: linear-gradient(115deg,
+      rgba(124, 58, 237, 0.55) 0%,
+      rgba(6, 182, 212, 0.45) 45%,
+      rgba(244, 114, 182, 0.4) 100%);
   opacity: 0;
   z-index: -1;
   transition: opacity 500ms ease;
@@ -601,7 +599,7 @@
 }
 
 .lp-cta-primary:hover {
-  border-color: rgba(139,92,246,0.6);
+  border-color: rgba(139, 92, 246, 0.6);
   color: white;
   transform: translateY(-1px);
 }
@@ -833,29 +831,29 @@
 
   /* Outline / stroke — no fill */
   color: transparent;
-  -webkit-text-stroke: 1.5px rgba(255,255,255,0.15);
+  -webkit-text-stroke: 1.5px rgba(255, 255, 255, 0.15);
 
   /* 3D stacked depth shadow */
   text-shadow:
-    1px 1px 0 rgba(255,255,255,0.04),
-    2px 2px 0 rgba(255,255,255,0.03),
-    3px 3px 0 rgba(255,255,255,0.025),
-    4px 4px 0 rgba(255,255,255,0.02),
-    5px 5px 0 rgba(255,255,255,0.015),
-    6px 6px 18px rgba(0,0,0,0.6);
+    1px 1px 0 rgba(255, 255, 255, 0.04),
+    2px 2px 0 rgba(255, 255, 255, 0.03),
+    3px 3px 0 rgba(255, 255, 255, 0.025),
+    4px 4px 0 rgba(255, 255, 255, 0.02),
+    5px 5px 0 rgba(255, 255, 255, 0.015),
+    6px 6px 18px rgba(0, 0, 0, 0.6);
 
   transition: -webkit-text-stroke 400ms ease, text-shadow 400ms ease;
 }
 
 .lp-footer-wordmark:hover {
-  -webkit-text-stroke: 1.5px rgba(167,139,250,0.65);
+  -webkit-text-stroke: 1.5px rgba(167, 139, 250, 0.65);
   text-shadow:
-    1px 1px 0 rgba(124,58,237,0.06),
-    2px 2px 0 rgba(124,58,237,0.05),
-    3px 3px 0 rgba(124,58,237,0.04),
-    4px 4px 8px rgba(124,58,237,0.08),
-    0 0 25px rgba(139,92,246,0.3),
-    0 0 55px rgba(139,92,246,0.12);
+    1px 1px 0 rgba(124, 58, 237, 0.06),
+    2px 2px 0 rgba(124, 58, 237, 0.05),
+    3px 3px 0 rgba(124, 58, 237, 0.04),
+    4px 4px 8px rgba(124, 58, 237, 0.08),
+    0 0 25px rgba(139, 92, 246, 0.3),
+    0 0 55px rgba(139, 92, 246, 0.12);
 }
 
 /* ─── End Landing Page ─────────────────────────────────────────────────── */
@@ -3591,60 +3589,80 @@ button:hover {
   }
 
   .dashboard {
-    padding-bottom: 4.5rem;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+    min-height: 100vh;
   }
 
   .sidebar {
-    position: fixed;
-    inset: auto 0 0 0;
-    z-index: 20;
-    height: 4.5rem;
-    display: grid;
-    grid-template-columns: 1fr;
-    padding: 0.45rem;
-    border-width: 1px 0 0;
+    position: sticky;
+    top: 0;
+    height: auto;
+    z-index: 30;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.7rem 1rem;
+    border-width: 0 0 1px;
+    background: rgba(10, 12, 24, 0.92);
+    backdrop-filter: blur(12px);
   }
 
-  .sidebar .brand-mark,
-  .upgrade-card,
-  .profile-card {
-    display: none;
+  .sidebar .brand-mark {
+    margin-right: 0.25rem;
   }
 
   .sidebar nav {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    display: flex;
+    flex-direction: row;
+    flex: 1;
     gap: 0.25rem;
     margin: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .sidebar nav::-webkit-scrollbar {
+    display: none;
   }
 
   .sidebar a {
-    justify-content: center;
-    padding: 0.55rem;
-    font-size: 0;
+    flex-shrink: 0;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
   }
 
-  .sidebar a .icon {
-    width: 1.35rem;
-    height: 1.35rem;
+  .upgrade-card {
+    display: none;
+  }
+
+  .profile-card {
+    margin-left: auto;
+    padding: 0.4rem 0.6rem;
+    gap: 0.5rem;
+  }
+
+  .profile-card>div {
+    display: none;
+  }
+
+  .resume-workbench,
+  .analysis-panel {
+    position: relative;
+    height: auto;
+    min-height: 0;
+    padding: 1.25rem;
+    border-width: 0;
   }
 
   .analysis-panel {
-    position: fixed;
-    inset: auto 0 4.5rem;
-    z-index: 18;
-    height: min(52vh, 560px);
-    border-width: 1px 0 0;
-    border-radius: 1rem 1rem 0 0;
-  }
-
-  .resume-workbench {
-    padding-bottom: calc(52vh + 5rem);
+    border-top: 1px solid rgba(148, 163, 184, 0.15);
+    border-radius: 0;
   }
 
   .save-float {
     right: 1rem;
-    bottom: calc(52vh + 5.5rem);
+    bottom: 1rem;
   }
 }
 
@@ -3774,17 +3792,22 @@ button:hover {
   }
 
   .resume-workbench {
-    padding: 1rem 1rem calc(52vh + 5.5rem);
+    padding: 1rem;
   }
 
   .topbar {
     align-items: flex-start;
     flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .topbar h1 {
+    font-size: 1.1rem;
   }
 
   .resume-paper {
-    min-height: 800px;
-    padding: 1.3rem;
+    min-height: 0;
+    padding: 1.25rem;
   }
 
   .floating-toolbar {
@@ -3793,13 +3816,38 @@ button:hover {
     right: auto;
   }
 
+  .analysis-panel {
+    padding: 1rem;
+  }
+
   .tabs {
     grid-template-columns: repeat(2, 1fr);
+    gap: 0.4rem;
+  }
+
+  .score-dial {
+    transform: scale(0.85);
+    transform-origin: center;
+    margin: 0 auto;
+  }
+
+  .score-list b {
+    font-size: 0.85rem;
+  }
+
+  .keyword-columns {
+    grid-template-columns: 1fr !important;
   }
 
   .download-modal {
     max-height: 92vh;
     overflow: auto;
+    grid-template-columns: 1fr !important;
+  }
+
+  .sidebar-logout {
+    font-size: 0.7rem;
+    padding: 0.3rem 0.55rem;
   }
 }
 
@@ -4280,6 +4328,999 @@ button:hover {
 }
 
 /* ─── End Auth v2 ────────────────────────────────────────────────────────── */
+
+/* ─── Onboarding (minimal black) ─────────────────────────────────────────── */
+.ob2-shell {
+  min-height: 100vh;
+  width: 100%;
+  background: #000;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+.ob2-card {
+  width: 100%;
+  max-width: 560px;
+  background: #0a0a0a;
+  border: 1px solid #1f1f1f;
+  border-radius: 14px;
+  padding: 2.25rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.6rem;
+}
+
+.ob2-header h1 {
+  font-size: 1.6rem;
+  font-weight: 600;
+  margin: 0.4rem 0 0.5rem;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+
+.ob2-step {
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6b6b6b;
+  margin: 0;
+}
+
+.ob2-muted {
+  color: #888;
+  font-size: 0.92rem;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.ob2-field {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.ob2-field legend {
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: #e5e5e5;
+  padding: 0;
+}
+
+.ob2-radio-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.65rem;
+}
+
+.ob2-radio-card {
+  cursor: pointer;
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 10px;
+  padding: 0.85rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.ob2-radio-card input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ob2-radio-card:hover {
+  border-color: #383838;
+  background: #131313;
+}
+
+.ob2-radio-card.selected {
+  border-color: #fff;
+  background: #1a1a1a;
+}
+
+.ob2-radio-title {
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: #fff;
+}
+
+.ob2-radio-sub {
+  font-size: 0.74rem;
+  color: #777;
+  line-height: 1.35;
+}
+
+.ob2-input {
+  width: 100%;
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 10px;
+  padding: 0.75rem 0.95rem;
+  color: #fff;
+  font-size: 0.95rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.ob2-input::placeholder {
+  color: #5a5a5a;
+}
+
+.ob2-input:focus {
+  border-color: #555;
+}
+
+.ob2-upload-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.ob2-upload-label {
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: #e5e5e5;
+}
+
+.ob2-upload-label em {
+  font-style: normal;
+  color: #6b6b6b;
+  font-weight: 400;
+  font-size: 0.78rem;
+  margin-left: 0.35rem;
+}
+
+.ob2-upload-tabs {
+  display: inline-flex;
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 8px;
+  padding: 2px;
+}
+
+.ob2-upload-tabs button {
+  background: transparent;
+  border: 0;
+  color: #888;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.78rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, color 0.15s;
+}
+
+.ob2-upload-tabs button:hover {
+  color: #ddd;
+}
+
+.ob2-upload-tabs button.selected {
+  background: #1f1f1f;
+  color: #fff;
+}
+
+.ob2-dropzone {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 1.6rem 1rem;
+  background: #0e0e0e;
+  border: 1px dashed #2a2a2a;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.ob2-dropzone:hover {
+  border-color: #444;
+  background: #121212;
+}
+
+.ob2-dropzone input[type="file"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.ob2-dropzone strong {
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: #fff;
+}
+
+.ob2-dropzone-name {
+  word-break: break-all;
+  max-width: 100%;
+}
+
+.ob2-dropzone-meta {
+  font-size: 0.76rem;
+  color: #6b6b6b;
+}
+
+.ob2-textarea {
+  width: 100%;
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 10px;
+  padding: 0.75rem 0.95rem;
+  color: #fff;
+  font-size: 0.9rem;
+  font-family: inherit;
+  outline: none;
+  resize: vertical;
+  min-height: 120px;
+  transition: border-color 0.15s;
+}
+
+.ob2-textarea::placeholder {
+  color: #5a5a5a;
+}
+
+.ob2-textarea:focus {
+  border-color: #555;
+}
+
+.ob2-pill-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.55rem;
+}
+
+.ob2-pill {
+  cursor: pointer;
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 999px;
+  padding: 0.65rem 1rem;
+  font-size: 0.86rem;
+  color: #ddd;
+  text-align: center;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ob2-pill input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ob2-pill:hover {
+  border-color: #383838;
+  color: #fff;
+}
+
+.ob2-pill.selected {
+  border-color: #fff;
+  background: #fff;
+  color: #000;
+  font-weight: 500;
+}
+
+.ob2-submit {
+  margin-top: 0.4rem;
+  width: 100%;
+  background: #fff;
+  color: #000;
+  border: 0;
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+  font-family: inherit;
+}
+
+.ob2-submit:hover:not(:disabled) {
+  background: #e5e5e5;
+}
+
+.ob2-submit:disabled {
+  background: #2a2a2a;
+  color: #666;
+  cursor: not-allowed;
+}
+
+@media (max-width: 540px) {
+  .ob2-card {
+    padding: 1.6rem 1.2rem;
+    border-radius: 12px;
+  }
+
+  .ob2-radio-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ob2-pill-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ob2-header h1 {
+    font-size: 1.35rem;
+  }
+}
+
+/* ─── End Onboarding ─────────────────────────────────────────────────────── */
+
+/* ─── Dashboard pro dark theme ───────────────────────────────────────────── */
+
+/* App shell + ambient grid: pure black */
+.app-shell:has(.dashboard) {
+  background: #050505;
+  color: #e5e5e5;
+}
+
+.app-shell:has(.dashboard) .ambient-grid {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.6), transparent 50%);
+}
+
+/* Dashboard grid keeps 3-col but adopts dark surfaces. */
+.dashboard {
+  background: #050505;
+  color: #e5e5e5;
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+/* ── Sidebar ─────────────────────────────────────────────────────────────── */
+.dashboard .sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  background: #0a0a0a;
+  border: 0;
+  border-right: 1px solid #181818;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+.sidebar-scroll {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1.25rem 1rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a2a transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: #2a2a2a;
+  border-radius: 4px;
+}
+
+.dashboard .sidebar .brand-mark {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.4rem 0.5rem 0.5rem;
+  border-bottom: 1px solid #181818;
+  margin-bottom: 0.25rem;
+}
+
+.dashboard .sidebar .brand-mark strong {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+
+.dashboard .sidebar .brand-glyph {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: #fff;
+  color: #000;
+}
+
+.dashboard .sidebar nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+}
+
+.dashboard .sidebar nav a {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.6rem 0.7rem;
+  border-radius: 7px;
+  color: #888;
+  font-size: 0.86rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.dashboard .sidebar nav a:hover {
+  background: #131313;
+  color: #ddd;
+}
+
+.dashboard .sidebar nav a.active {
+  background: #1a1a1a;
+  color: #fff;
+}
+
+.dashboard .sidebar nav a svg {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.dashboard .sidebar nav a.active svg {
+  opacity: 1;
+}
+
+/* Upgrade card — minimal, no gradients */
+.dashboard .upgrade-card {
+  margin-top: auto;
+  padding: 0.9rem;
+  background: #0f0f0f;
+  border: 1px solid #1f1f1f;
+  border-radius: 10px;
+}
+
+.dashboard .upgrade-card b {
+  font-size: 0.86rem;
+  color: #fff;
+  font-weight: 600;
+}
+
+.dashboard .upgrade-card p {
+  margin: 0.35rem 0 0.75rem;
+  color: #777;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.dashboard .upgrade-card button {
+  width: 100%;
+  min-height: 2.2rem;
+  border: 0;
+  border-radius: 7px;
+  background: #fff;
+  color: #000;
+  font-weight: 600;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.dashboard .upgrade-card button:hover {
+  background: #e5e5e5;
+}
+
+/* Profile card */
+.dashboard .profile-card {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.65rem 0.7rem;
+  background: #0f0f0f;
+  border: 1px solid #1f1f1f;
+  border-radius: 10px;
+}
+
+.dashboard .profile-card > span {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 999px;
+  background: #1f1f1f;
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.78rem;
+}
+
+.dashboard .profile-card > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.dashboard .profile-card b {
+  display: block;
+  font-size: 0.82rem;
+  color: #fff;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dashboard .profile-card small {
+  display: block;
+  color: #666;
+  font-size: 0.7rem;
+}
+
+.dashboard .sidebar-logout {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid #222;
+  border-radius: 7px;
+  background: transparent;
+  color: #888;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  padding: 0;
+  margin: 0;
+  font-size: 0;
+}
+
+.dashboard .sidebar-logout:hover {
+  color: #fff;
+  border-color: #444;
+  background: #161616;
+}
+
+/* ── Resume workbench ────────────────────────────────────────────────────── */
+.dashboard .resume-workbench {
+  background: #050505;
+  padding: 2rem;
+}
+
+.dashboard .topbar small {
+  color: #888;
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.dashboard .topbar h1 {
+  font-size: clamp(1.4rem, 3vw, 2rem);
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+
+.dashboard .topbar-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 38px;
+  padding: 0 0.85rem;
+  background: #0f0f0f;
+  border: 1px solid #1f1f1f;
+  border-radius: 8px;
+  color: #ddd;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.dashboard .topbar-actions button:hover {
+  background: #161616;
+  border-color: #2a2a2a;
+  color: #fff;
+}
+
+/* Keep resume paper as a white sheet (document feel) */
+
+/* ── Analysis panel ──────────────────────────────────────────────────────── */
+.dashboard .analysis-panel {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1.25rem;
+  background: #0a0a0a;
+  border: 0;
+  border-left: 1px solid #181818;
+  backdrop-filter: none;
+  box-shadow: none;
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a2a transparent;
+}
+
+.dashboard .analysis-panel::-webkit-scrollbar {
+  width: 6px;
+}
+.dashboard .analysis-panel::-webkit-scrollbar-thumb {
+  background: #2a2a2a;
+  border-radius: 4px;
+}
+
+.dashboard .tabs {
+  background: #0f0f0f;
+  border: 1px solid #1f1f1f;
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.dashboard .tabs button {
+  background: transparent;
+  border: 0;
+  color: #888;
+  font-size: 0.78rem;
+  font-weight: 500;
+  border-radius: 6px;
+  padding: 0.45rem 0.4rem;
+  min-height: 0;
+  transition: background 0.12s, color 0.12s;
+}
+
+.dashboard .tabs button:hover {
+  color: #ddd;
+}
+
+.dashboard .tabs button.active {
+  background: #1f1f1f;
+  color: #fff;
+}
+
+.dashboard .analysis-panel h2 {
+  color: #fff;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.dashboard .analysis-panel h2 + p {
+  color: #888;
+  font-size: 0.85rem;
+}
+
+.dashboard .analysis-panel h3 {
+  color: #d4d4d4;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin: 1.5rem 0 0.65rem;
+}
+
+/* Score dial */
+.dashboard .score-dial {
+  background: conic-gradient(#fff calc(var(--score) * 1%), #1a1a1a 0);
+  width: 9.5rem;
+  height: 9.5rem;
+}
+
+.dashboard .score-dial::after {
+  background: #0a0a0a;
+  inset: 0.55rem;
+}
+
+.dashboard .score-dial strong {
+  color: #fff;
+  font-size: 3rem;
+  font-weight: 600;
+}
+
+.dashboard .score-dial span {
+  color: #666;
+  font-size: 0.8rem;
+}
+
+.dashboard .score-list span {
+  color: #aaa;
+  font-size: 0.74rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+.dashboard .score-list b {
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.dashboard .score-list em {
+  background: #1a1a1a;
+}
+
+.dashboard .score-list i {
+  background: #fff;
+}
+
+.dashboard .score-list .icon {
+  color: #888;
+}
+
+/* Issue / win / suggestion / question cards */
+.dashboard .issue-card,
+.dashboard .win-card,
+.dashboard .suggestion-card,
+.dashboard .question-card,
+.dashboard .tip-card {
+  background: #0f0f0f;
+  border: 1px solid #1f1f1f;
+  color: #d4d4d4;
+}
+
+.dashboard .issue-card.critical {
+  background: #0f0f0f;
+  border-color: #3a1a1a;
+}
+
+.dashboard .issue-card span {
+  background: #ef4444;
+}
+
+.dashboard .issue-card.moderate span {
+  background: #f59e0b;
+}
+
+.dashboard .issue-card.minor span {
+  background: #2a2a2a;
+  color: #aaa;
+}
+
+.dashboard .issue-card b {
+  color: #fff;
+  font-weight: 600;
+}
+
+.dashboard .issue-card p,
+.dashboard .question-card p,
+.dashboard .tip-card {
+  color: #888;
+  font-size: 0.85rem;
+}
+
+.dashboard .win-card {
+  color: #d4d4d4;
+}
+
+.dashboard .win-card .icon {
+  color: #10b981;
+}
+
+.dashboard .issue-card button,
+.dashboard .suggestion-card button,
+.dashboard .apply-all,
+.dashboard .panel-cta {
+  background: #fff;
+  color: #000;
+  font-weight: 600;
+  font-size: 0.8rem;
+  border-radius: 7px;
+}
+
+.dashboard .issue-card button:hover,
+.dashboard .suggestion-card button:hover,
+.dashboard .apply-all:hover,
+.dashboard .panel-cta:hover {
+  background: #e5e5e5;
+}
+
+.dashboard .suggestion-card del {
+  color: #666;
+}
+
+.dashboard .suggestion-card p {
+  color: #d4d4d4;
+}
+
+.dashboard .accordion button {
+  background: #0f0f0f;
+  border: 1px solid #1f1f1f;
+  color: #ddd;
+  border-radius: 8px;
+}
+
+.dashboard .accordion button:hover {
+  background: #161616;
+}
+
+.dashboard .job-input,
+.dashboard .paste-area {
+  background: #0f0f0f;
+  border: 1px solid #1f1f1f;
+  color: #fff;
+}
+
+.dashboard .job-input:focus,
+.dashboard .paste-area:focus {
+  border-color: #444;
+  outline: none;
+}
+
+.dashboard .empty-panel {
+  color: #888;
+}
+
+.dashboard .empty-panel .primary-button {
+  background: #fff;
+  color: #000;
+  border: 0;
+  border-radius: 7px;
+  padding: 0.55rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dashboard .word-cloud span.found {
+  background: #1a1a1a;
+  color: #fff;
+  border: 1px solid #2a2a2a;
+}
+
+.dashboard .word-cloud span.missing {
+  background: transparent;
+  color: #888;
+  border: 1px dashed #333;
+}
+
+/* Save float + download paper */
+.dashboard .save-float {
+  background: #fff;
+  color: #000;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  font-weight: 600;
+  border-radius: 999px;
+}
+
+.dashboard .download-paper {
+  background: #111827;
+  color: #fff;
+  font-weight: 600;
+}
+
+/* Mobile sidebar in dark theme */
+@media (max-width: 1100px) {
+  .dashboard .sidebar {
+    height: auto;
+    border-right: 0;
+    border-bottom: 1px solid #181818;
+    background: rgba(10, 10, 10, 0.96);
+  }
+  .sidebar-scroll {
+    flex-direction: row;
+    align-items: center;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0.6rem 0.9rem;
+    gap: 0.6rem;
+  }
+  .dashboard .sidebar .brand-mark {
+    border-bottom: 0;
+    padding: 0;
+    margin-bottom: 0;
+    flex-shrink: 0;
+  }
+  .dashboard .sidebar nav {
+    flex-direction: row;
+    flex: 1;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .dashboard .sidebar nav::-webkit-scrollbar {
+    display: none;
+  }
+  .dashboard .sidebar nav a {
+    flex-shrink: 0;
+  }
+  .dashboard .upgrade-card {
+    display: none;
+  }
+  .dashboard .profile-card {
+    margin-left: auto;
+    flex-shrink: 0;
+    padding: 0.4rem 0.55rem;
+  }
+  .dashboard .profile-card > div {
+    display: none;
+  }
+  .dashboard .analysis-panel {
+    position: relative;
+    height: auto;
+    border-left: 0;
+    border-top: 1px solid #181818;
+  }
+  .dashboard .resume-workbench {
+    padding: 1.5rem;
+  }
+}
+/* ─── End Dashboard pro dark theme ───────────────────────────────────────── */
+
+/* ─── Lock dashboard to viewport: 3 independent scroll columns ──────────── */
+html:has(.dashboard),
+body:has(.dashboard) {
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+}
+
+.app-shell:has(.dashboard) {
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+}
+
+.dashboard {
+  min-height: 0 !important;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+}
+
+.dashboard .resume-workbench {
+  height: 100vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a2a transparent;
+}
+
+.dashboard .resume-workbench::-webkit-scrollbar {
+  width: 8px;
+}
+.dashboard .resume-workbench::-webkit-scrollbar-thumb {
+  background: #2a2a2a;
+  border-radius: 999px;
+}
+
+/* On mobile (<=1100px) the grid collapses to one column — release the lock
+   so the page behaves like a normal scrolling document. */
+@media (max-width: 1100px) {
+  html:has(.dashboard),
+  body:has(.dashboard) {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+  .app-shell:has(.dashboard) {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+  .dashboard {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+  .dashboard .sidebar,
+  .dashboard .analysis-panel,
+  .dashboard .resume-workbench {
+    height: auto;
+    overflow: visible;
+  }
+}
+/* ─── End viewport lock ──────────────────────────────────────────────────── */
 
 @layer base {
   * {

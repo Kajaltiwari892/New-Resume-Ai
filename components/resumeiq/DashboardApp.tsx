@@ -9,6 +9,18 @@ import {
   type ChangeEvent,
 } from "react";
 import { useRouter } from "next/navigation";
+import {
+  FiClock,
+  FiFileText,
+  FiGrid,
+  FiHelpCircle,
+  FiLogOut,
+  FiMessageSquare,
+  FiSearch,
+  FiSettings,
+  FiZap,
+} from "react-icons/fi";
+import { FileSearch } from "lucide-react";
 import { Icon, type IconName } from "./Icon";
 import {
   analyzingMessages,
@@ -31,7 +43,6 @@ import {
   listResumes,
   matchKeywords as matchKeywordsApi,
   patchResume,
-  saveOnboarding,
   uploadResume,
   type Analysis,
   type ExportOptions,
@@ -43,7 +54,7 @@ import {
   type Suggestion,
 } from "@/lib/resumeClient";
 
-type Mode = "onboarding" | "analyzing" | "dashboard";
+type Mode = "upload" | "analyzing" | "dashboard";
 type UploadTab = "file" | "paste";
 type TabKey = "Score" | "Suggestions" | "Interview" | "Keywords";
 
@@ -88,15 +99,15 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
   const { toasts, push, dismiss } = useToasts();
 
   // ---- boot + mode -----------------------------------------------------
-  const [mode, setMode] = useState<Mode>("onboarding");
+  const [mode, setMode] = useState<Mode>("upload");
   const [booting, setBooting] = useState(true);
   const [messageIndex, setMessageIndex] = useState(0);
 
-  // ---- onboarding form (simplified: just upload) -----------------------
+  // ---- profile snapshot (read-only here; editing lives in /onboarding) -
   const [fullName, setFullName] = useState("");
-  const [jobTitle] = useState("");
-  const [targetRole] = useState("");
-  const [dreamCompanies] = useState<string[]>([]);
+  const [jobTitle, setJobTitle] = useState("");
+  const [targetRole, setTargetRole] = useState("");
+  const [dreamCompanies, setDreamCompanies] = useState<string[]>([]);
   const [uploadTab, setUploadTab] = useState<UploadTab>("file");
   const [file, setFile] = useState<File | null>(null);
   const [pastedText, setPastedText] = useState("");
@@ -182,14 +193,8 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
         if (profile) {
           setFullName(profile.fullName || user.name || "");
           setJobTitle(profile.jobTitle || "");
-          if (profile.experienceLevel) setExperienceLevel(profile.experienceLevel);
-          if (profile.industry) setIndustry(profile.industry);
           setTargetRole(profile.targetRole || "");
           setDreamCompanies(profile.dreamCompanies || []);
-          setCareerSwitch(Boolean(profile.careerSwitch));
-          setPreviousField(profile.previousField || "");
-          if (profile.resumeType) setResumeType(profile.resumeType);
-          if (profile.priorities?.length) setSelectedPriorities(profile.priorities);
         } else {
           setFullName(user.name || "");
         }
@@ -216,7 +221,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
 
   // ---- onboarding actions ---------------------------------------------
 
-  function validateOnboarding(): string | null {
+  function validateUpload(): string | null {
     if (uploadTab === "file" && !file) return "Please upload a PDF or DOCX resume.";
     if (uploadTab === "paste" && pastedText.trim().length < 50)
       return "Paste at least 50 characters of your resume.";
@@ -224,27 +229,13 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
   }
 
   async function handleAnalyzeFlow() {
-    const error = validateOnboarding();
+    const error = validateUpload();
     if (error) {
       push({ kind: "warning", title: "One more thing", message: error });
       return;
     }
     setSubmitting(true);
     try {
-      // Save minimal profile (name from auth user)
-      saveOnboarding({
-        fullName: fullName.trim() || user.name,
-        jobTitle: "",
-        experienceLevel: "1-3 yrs",
-        industry: "Technology",
-        targetRole: "",
-        dreamCompanies: [],
-        careerSwitch: false,
-        previousField: "",
-        resumeType: "Chronological",
-        priorities: [],
-      }).catch(() => { /* non-blocking */ });
-
       let newResume: Resume;
       if (uploadTab === "file" && file) {
         const { resume: created } = await uploadResume(file);
@@ -276,7 +267,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
         title: "Couldn't start analysis",
         message: errorMessage(err, "Something went wrong — please try again."),
       });
-      setMode("onboarding");
+      setMode("upload");
     } finally {
       setSubmitting(false);
     }
@@ -559,12 +550,12 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
     <main className="app-shell">
       <div className="ambient-grid" />
 
-      {mode === "onboarding" && (
+      {mode === "upload" && (
         <section className="ob-stage" aria-label="Upload your resume">
           <div className="ob-card glass-panel">
             {/* Brand */}
             <div className="ob-brand">
-              <span className="brand-glyph"><Icon name="spark" /></span>
+              <span className="brand-glyph"><FileSearch size={16} strokeWidth={1.8} /></span>
               <strong>ResumeIQ</strong>
             </div>
 
@@ -581,7 +572,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
                 onClick={() => setUploadTab("file")}
                 id="ob-tab-file"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>
                 Upload File
               </button>
               <button
@@ -590,7 +581,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
                 onClick={() => setUploadTab("paste")}
                 id="ob-tab-paste"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
                 Paste Text
               </button>
             </div>
@@ -608,7 +599,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
                   {file ? (
                     <>
                       <span className="ob-file-icon">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>
                       </span>
                       <b className="ob-file-name">{file.name}</b>
                       <small className="ob-file-meta">{(file.size / 1024).toFixed(0)} KB · Click to change</small>
@@ -616,7 +607,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
                   ) : (
                     <>
                       <span className="ob-upload-icon">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
                       </span>
                       <b>Drop your resume here</b>
                       <small>PDF or DOCX · Max 5 MB</small>
@@ -638,7 +629,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
 
             {/* Supported formats hint */}
             <p className="ob-hint">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
               Your data is never stored beyond the session. Supports PDF and DOCX.
             </p>
 
@@ -655,7 +646,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
               ) : (
                 <>
                   Analyze My Resume
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 12h14M12 5l7 7-7 7" /></svg>
                 </>
               )}
             </button>
@@ -693,46 +684,50 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
       {mode === "dashboard" && resume && (
         <section className="dashboard">
           <aside className="sidebar">
-            <div className="brand-mark">
-              <span className="brand-glyph">
-                <Icon name="spark" />
-              </span>
-              <strong>ResumeIQ</strong>
-            </div>
-            <nav>
-              {(
-                [
-                  ["grid", "Dashboard"],
-                  ["file", "My Resumes"],
-                  ["chat", "Interview Prep"],
-                  ["history", "History"],
-                  ["settings", "Settings"],
-                ] as const
-              ).map(([icon, label]) => (
-                <a className={label === "Dashboard" ? "active" : ""} key={label}>
-                  <Icon name={icon as IconName} /> {label}
-                </a>
-              ))}
-            </nav>
-            <div className="upgrade-card">
-              <b>Upgrade to Pro</b>
-              <p>Unlock unlimited AI rewrites and interview drills.</p>
-              <button>Upgrade</button>
-            </div>
-            <div className="profile-card">
-              <span>{headerInitials}</span>
-              <div>
-                <b>{headerName}</b>
-                <small>Free plan</small>
+            <div className="sidebar-scroll">
+              <div className="brand-mark">
+                <span className="brand-glyph">
+                  <FileSearch size={14} strokeWidth={1.8} />
+                </span>
+                <strong>ResumeIQ</strong>
               </div>
-              <button
-                type="button"
-                className="ghost-button sidebar-logout"
-                onClick={handleLogout}
-                aria-label="Sign out"
-              >
-                Sign out
-              </button>
+              <nav>
+                {(
+                  [
+                    [FiGrid, "Dashboard"],
+                    [FiFileText, "My Resumes"],
+                    [FiMessageSquare, "Interview Prep"],
+                    [FiClock, "History"],
+                    [FiSettings, "Settings"],
+                  ] as const
+                ).map(([NavIcon, label]) => (
+                  <a className={label === "Dashboard" ? "active" : ""} key={label}>
+                    <NavIcon size={16} />
+                    <span>{label}</span>
+                  </a>
+                ))}
+              </nav>
+              <div className="upgrade-card">
+                <b>Upgrade to Pro</b>
+                <p>Unlock unlimited AI rewrites and interview drills.</p>
+                <button>Upgrade</button>
+              </div>
+              <div className="profile-card">
+                <span>{headerInitials}</span>
+                <div>
+                  <b>{headerName}</b>
+                  <small>Free plan</small>
+                </div>
+                <button
+                  type="button"
+                  className="ghost-button sidebar-logout"
+                  onClick={handleLogout}
+                  aria-label="Sign out"
+                  title="Sign out"
+                >
+                  <FiLogOut size={14} />
+                </button>
+              </div>
             </div>
           </aside>
 
@@ -744,13 +739,13 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
               </div>
               <div className="topbar-actions">
                 <button onClick={handleReanalyze} title="Re-run analysis">
-                  <Icon name="spark" /> Re-analyze
+                  <FiZap size={14} /> Re-analyze
                 </button>
-                <button aria-label="Search">
-                  <Icon name="search" />
+                <button aria-label="Search" title="Search">
+                  <FiSearch size={15} />
                 </button>
-                <button aria-label="History">
-                  <Icon name="history" />
+                <button aria-label="Help" title="Help">
+                  <FiHelpCircle size={15} />
                 </button>
               </div>
             </div>

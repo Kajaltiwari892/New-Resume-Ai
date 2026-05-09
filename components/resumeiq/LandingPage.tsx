@@ -2,11 +2,43 @@
 import Link from "next/link";
 import { motion } from "motion/react";
 import dynamic from "next/dynamic";
-import { FileSearch } from "lucide-react";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { bootstrapSession } from "@/lib/authClient";
+import { getOnboarding } from "@/lib/resumeClient";
+import BrandMark from "./BrandMark";
 
 const DarkVeil = dynamic(() => import("@/components/DarkVeil"), { ssr: false });
 
 export default function LandingPage() {
+  const router = useRouter();
+
+  // Cold visit (browser restart, direct URL, external referrer) → if a
+  // valid session exists, send them straight to their dashboard. In-app
+  // navigation from /dashboard back to / (same-origin referrer) is left
+  // alone so the brand link still works.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const ref = document.referrer;
+    const cameFromSameOrigin = ref && ref.startsWith(window.location.origin);
+    if (cameFromSameOrigin) return;
+
+    let cancelled = false;
+    (async () => {
+      const user = await bootstrapSession();
+      if (cancelled || !user) return;
+      try {
+        const { profile } = await getOnboarding();
+        router.replace(profile?.onboardingCompleted ? "/dashboard" : "/onboarding");
+      } catch {
+        router.replace("/onboarding");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
   return (
     <main className="lp-shell">
       {/* ── DarkVeil covers the ENTIRE page including nav ── */}
@@ -25,12 +57,7 @@ export default function LandingPage() {
       {/* ── Glass Navbar (floats over DarkVeil) ── */}
       <header className="lp-nav-wrap" aria-label="Main navigation">
         <nav className="lp-nav lp-nav-glass">
-          <Link className="lp-brand" href="/">
-            <span className="lp-brand-icon" aria-hidden>
-              <FileSearch size={17} strokeWidth={1.8} />
-            </span>
-            ResumeIQ
-          </Link>
+          <BrandMark />
 
           {/* Spacer */}
           <div style={{ flex: 1 }} />
@@ -100,12 +127,7 @@ export default function LandingPage() {
         <div className="lp-footer-top">
           {/* Brand + copyright */}
           <div className="lp-footer-brand-col">
-            <Link className="lp-brand" href="/" style={{ marginBottom: "0.75rem" }}>
-              <span className="lp-brand-icon" aria-hidden>
-                 <FileSearch size={17} strokeWidth={1.8} />
-              </span>
-              ResumeIQ
-            </Link>
+            <BrandMark style={{ marginBottom: "0.75rem" }} />
             <p className="lp-footer-copy">© copyright ResumeIQ 2026.<br />All rights reserved.</p>
           </div>
 

@@ -29,6 +29,18 @@ const ProfileSchema = new Schema(
       default: "Chronological",
     },
     priorities: { type: [String], default: [] },
+    primaryGoal: {
+      type: String,
+      enum: [
+        "Get more interviews",
+        "Switch careers",
+        "Land first job",
+        "Improve resume quality",
+        "",
+      ],
+      default: "",
+    },
+    onboardingCompleted: { type: Boolean, default: false },
   },
   {
     timestamps: true,

@@ -18,7 +18,7 @@ const app = express();
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
 
-app.use(helmet());
+app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 const allowedOrigins = new Set(
   env.clientOrigin
     .split(",")
@@ -26,16 +26,25 @@ const allowedOrigins = new Set(
     .filter(Boolean),
 );
 
+const isDev = env.nodeEnv !== "production";
+
 app.use(
   cors({
     origin: (origin, cb) => {
       // Same-origin requests have no Origin header; allow those.
       if (!origin) return cb(null, true);
       if (allowedOrigins.has(origin)) return cb(null, true);
-      return cb(new Error("Not allowed by CORS"));
+      // Dev convenience: allow any localhost / 127.0.0.1 port.
+      if (isDev && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+        return cb(null, true);
+      }
+      // eslint-disable-next-line no-console
+      console.warn(`[cors] blocked origin: ${origin}`);
+      return cb(null, false);
     },
     credentials: true,
-    methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   }),
 );
 

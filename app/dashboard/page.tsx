@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import DashboardApp from "@/components/resumeiq/DashboardApp";
 import { bootstrapSession, type PublicUser } from "@/lib/authClient";
+import { getOnboarding } from "@/lib/resumeClient";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -18,6 +19,18 @@ export default function DashboardPage() {
         if (cancelled) return;
         if (!current) {
           router.replace("/auth");
+          return;
+        }
+        // Onboarding gate.
+        try {
+          const { profile } = await getOnboarding();
+          if (cancelled) return;
+          if (!profile?.onboardingCompleted) {
+            router.replace("/onboarding");
+            return;
+          }
+        } catch {
+          if (!cancelled) router.replace("/onboarding");
           return;
         }
         setUser(current);

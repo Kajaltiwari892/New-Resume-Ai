@@ -17,11 +17,24 @@ export async function saveOnboarding(req, res) {
     "previousField",
     "resumeType",
     "priorities",
+    "primaryGoal",
   ];
   const update = {};
   for (const key of allowed) {
     if (key in req.body) update[key] = req.body[key];
   }
+
+  // Merge with existing profile to evaluate completeness across multiple PUTs.
+  const existing = await Profile.findOne({ userId: req.user._id }).lean();
+  const merged = { ...(existing || {}), ...update };
+
+  const minimumComplete =
+    Boolean(merged.experienceLevel) &&
+    Boolean((merged.targetRole || "").trim()) &&
+    Boolean(merged.primaryGoal);
+
+  if (minimumComplete) update.onboardingCompleted = true;
+
   const profile = await Profile.findOneAndUpdate(
     { userId: req.user._id },
     { $set: update },

@@ -1,17 +1,29 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
-import { FiCheck, FiLoader, FiX } from "react-icons/fi";
+import { useEffect, useMemo, useState } from "react";
+import { FiCheck, FiEye, FiEyeOff, FiLoader, FiX } from "react-icons/fi";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import BrandMark from "./BrandMark";
 import {
   AuthError,
+  bootstrapSession,
   login as loginRequest,
   register as registerRequest,
 } from "@/lib/authClient";
+import { getOnboarding } from "@/lib/resumeClient";
 import { ToastStack, useToasts, type ToastKind } from "./Toast";
+
+async function destinationAfterAuth(): Promise<"/dashboard" | "/onboarding"> {
+  try {
+    const { profile } = await getOnboarding();
+    return profile?.onboardingCompleted ? "/dashboard" : "/onboarding";
+  } catch {
+    return "/onboarding";
+  }
+}
 
 type Mode = "login" | "register";
 type ValidationDetail = { field?: string; message?: string };
@@ -65,8 +77,22 @@ export default function AuthPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const { toasts, push, dismiss } = useToasts();
+
+  // If already signed in, send them to wherever they belong.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const user = await bootstrapSession();
+      if (cancelled || !user) return;
+      router.replace(await destinationAfterAuth());
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   const passwordStatus = useMemo(
     () => PASSWORD_RULES.map((r) => ({ label: r.label, ok: r.test(password) })),
@@ -85,12 +111,14 @@ export default function AuthPage() {
     try {
       if (mode === "register") {
         await registerRequest({ email, name, password });
-        push({ kind: "success", title: "Welcome aboard!", message: "Redirecting…", duration: 2000 });
+        push({ kind: "success", title: "Welcome aboard!", message: "Just a couple quick questions…", duration: 2000 });
+        router.push("/onboarding");
       } else {
         await loginRequest({ email, password });
-        push({ kind: "success", title: "Signed in", message: "Taking you to your dashboard…", duration: 2000 });
+        const dest = await destinationAfterAuth();
+        push({ kind: "success", title: "Signed in", message: dest === "/dashboard" ? "Taking you to your dashboard…" : "Finishing your setup…", duration: 2000 });
+        router.push(dest);
       }
-      router.push("/dashboard");
     } catch (err) {
       if (err instanceof AuthError) push(mapAuthError(err, mode));
       else push({ kind: "error", title: "Network error", message: err instanceof Error ? err.message : "Couldn't reach the server." });
@@ -109,14 +137,7 @@ export default function AuthPage() {
       {/* ── Reverb-style pill nav ── */}
       <header className="lp-nav-wrap" style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 30 }}>
         <nav className="lp-nav">
-          <Link className="lp-brand" href="/">
-            <span className="lp-brand-icon" aria-hidden>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-              </svg>
-            </span>
-            ResumeIQ
-          </Link>
+          <BrandMark />
           <div className="lp-nav-center" />
           <div className="lp-nav-right">
             <Link href="/auth" className="lp-nav-signin">Sign in</Link>
@@ -188,16 +209,29 @@ export default function AuthPage() {
                 </Link>
               )}
             </div>
-            <Input
-              id="auth-password"
-              type="password"
-              autoComplete={mode === "login" ? "current-password" : "new-password"}
-              required
-              minLength={8}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder={mode === "register" ? "8+ chars, upper, lower, number" : "Your password"}
-            />
+            <div className="relative">
+              <Input
+                id="auth-password"
+                type={showPassword ? "text" : "password"}
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
+                required
+                minLength={8}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={mode === "register" ? "8+ chars, upper, lower, number" : "Your password"}
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-pressed={showPassword}
+                tabIndex={-1}
+                className="absolute right-3 top-1/2 -translate-y-1/2 z-10 flex h-7 w-7 items-center justify-center rounded text-neutral-400 hover:text-white transition-colors"
+              >
+                {showPassword ? <FiEyeOff size={16} /> : <FiEye size={16} />}
+              </button>
+            </div>
           </Field>
 
           {/* Password rules */}
