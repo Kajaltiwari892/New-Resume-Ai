@@ -343,6 +343,16 @@
   flex-shrink: 0;
 }
 
+.lp-brand-logo {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  filter: invert(1) brightness(10) contrast(1);
+  flex-shrink: 0;
+  display: block;
+}
+
+
 .lp-nav-center {
   display: flex;
   align-items: center;
@@ -556,20 +566,44 @@
   gap: 0.65rem;
   padding: 0.82rem 1.7rem;
   border-radius: 0.75rem;
-  background: white;
-  color: #09090b;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.22);
+  color: rgba(255,255,255,0.88);
   font-size: 0.95rem;
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: none;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
-  transition: transform 200ms, box-shadow 200ms, opacity 200ms;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 400ms ease, color 300ms ease, transform 300ms ease;
   letter-spacing: -0.01em;
+  z-index: 0;
+}
+
+/* Gradient layer — pre-set behind content, fades in on hover */
+.lp-cta-primary::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    115deg,
+    rgba(124,58,237,0.55) 0%,
+    rgba(6,182,212,0.45) 45%,
+    rgba(244,114,182,0.4) 100%
+  );
+  opacity: 0;
+  z-index: -1;
+  transition: opacity 500ms ease;
+}
+
+.lp-cta-primary:hover::before {
+  opacity: 1;
 }
 
 .lp-cta-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  opacity: 0.93;
+  border-color: rgba(139,92,246,0.6);
+  color: white;
+  transform: translateY(-1px);
 }
 
 /* Ghost CTA — no background, just text + underline on hover */
@@ -786,17 +820,42 @@
 }
 
 .lp-footer-wordmark {
+  display: block;
+  width: 100%;
   font-size: clamp(5rem, 16vw, 13rem);
-  font-weight: 800;
+  font-weight: 900;
   letter-spacing: -0.04em;
-  color: rgba(255, 255, 255, 0.06);
-  line-height: 0.85;
-  padding: 0 clamp(1rem, 4vw, 3.5rem);
+  line-height: 0.88;
+  padding: 0.5rem clamp(0.5rem, 2vw, 2rem) 0;
   overflow: hidden;
-  height: clamp(4rem, 12vw, 10rem);
-  display: flex;
-  align-items: flex-end;
   user-select: none;
+  cursor: default;
+
+  /* Outline / stroke — no fill */
+  color: transparent;
+  -webkit-text-stroke: 1.5px rgba(255,255,255,0.15);
+
+  /* 3D stacked depth shadow */
+  text-shadow:
+    1px 1px 0 rgba(255,255,255,0.04),
+    2px 2px 0 rgba(255,255,255,0.03),
+    3px 3px 0 rgba(255,255,255,0.025),
+    4px 4px 0 rgba(255,255,255,0.02),
+    5px 5px 0 rgba(255,255,255,0.015),
+    6px 6px 18px rgba(0,0,0,0.6);
+
+  transition: -webkit-text-stroke 400ms ease, text-shadow 400ms ease;
+}
+
+.lp-footer-wordmark:hover {
+  -webkit-text-stroke: 1.5px rgba(167,139,250,0.65);
+  text-shadow:
+    1px 1px 0 rgba(124,58,237,0.06),
+    2px 2px 0 rgba(124,58,237,0.05),
+    3px 3px 0 rgba(124,58,237,0.04),
+    4px 4px 8px rgba(124,58,237,0.08),
+    0 0 25px rgba(139,92,246,0.3),
+    0 0 55px rgba(139,92,246,0.12);
 }
 
 /* ─── End Landing Page ─────────────────────────────────────────────────── */

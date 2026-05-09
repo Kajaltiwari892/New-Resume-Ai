@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { motion } from "motion/react";
 import dynamic from "next/dynamic";
+import { FileSearch } from "lucide-react";
 
 const DarkVeil = dynamic(() => import("@/components/DarkVeil"), { ssr: false });
 
@@ -26,9 +27,7 @@ export default function LandingPage() {
         <nav className="lp-nav lp-nav-glass">
           <Link className="lp-brand" href="/">
             <span className="lp-brand-icon" aria-hidden>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-              </svg>
+              <FileSearch size={17} strokeWidth={1.8} />
             </span>
             ResumeIQ
           </Link>
@@ -90,22 +89,8 @@ export default function LandingPage() {
             <Link href="/auth" className="lp-cta-ghost">Sign in</Link>
           </motion.div>
 
-          {/* Trust row */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.62 }}
-            className="lp-trust"
-          >
-            <div className="lp-avatars" aria-hidden>
-              {["#7c3aed", "#06b6d4", "#f472b6", "#10b981"].map((c, i) => (
-                <span key={i} style={{ background: c }} />
-              ))}
-            </div>
-            <p>
-              <strong>10,000+</strong> resumes analyzed &nbsp;·&nbsp; <strong>94%</strong> interview rate
-            </p>
-          </motion.div>
+     
+         
         </div>
       </section>
 
@@ -117,9 +102,7 @@ export default function LandingPage() {
           <div className="lp-footer-brand-col">
             <Link className="lp-brand" href="/" style={{ marginBottom: "0.75rem" }}>
               <span className="lp-brand-icon" aria-hidden>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-                </svg>
+                 <FileSearch size={17} strokeWidth={1.8} />
               </span>
               ResumeIQ
             </Link>
@@ -162,9 +145,9 @@ export default function LandingPage() {
         </div>
 
         {/* Big brand watermark */}
-        <div className="lp-footer-wordmark" aria-hidden>
+        {/* <div className="lp-footer-wordmark" aria-hidden>
           ResumeIQ
-        </div>
+        </div> */}
       </footer>
     </main>
   );
