@@ -120,9 +120,17 @@ export async function analyzeResumeHandler(req, res) {
     resumeId: resume._id,
     userId: req.user._id,
     overallScore: result.overallScore,
-    bars: result.bars,
-    issues: result.issues,
-    wins: result.wins,
+    grade: result.grade || null,
+    verdict: result.verdict || null,
+    bars: result.bars || [],
+    issues: result.issues || [],
+    wins: result.wins || [],
+    dimensionScores: result.dimensionScores || null,
+    positives: result.positives || [],
+    top3Priorities: result.top3Priorities || [],
+    interviewRedFlags: result.interviewRedFlags || [],
+    atsPassProbability: result.atsPassProbability || null,
+    estimatedInterviewRate: result.estimatedInterviewRate || null,
   });
   res.status(201).json({ analysis });
 }

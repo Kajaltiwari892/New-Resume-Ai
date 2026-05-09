@@ -6,7 +6,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type ChangeEvent,
 } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -47,7 +46,6 @@ import {
   getOnboarding,
   listResumes,
   matchKeywords as matchKeywordsApi,
-  patchResume,
   rewriteError as rewriteErrorApi,
   uploadResume,
   type Analysis,
@@ -67,18 +65,26 @@ type TabKey = "Score" | "Errors" | "Suggestions" | "Interview" | "Keywords";
 
 const BAR_ICON_BY_KEY: Record<string, IconName> = {
   ats: "target",
+  ats_keywords: "target",
+  impact: "light",
+  verb: "spark",
+  bullet: "file",
+  leadership: "brain",
+  formatting: "layout",
+  summary: "edit",
+  projects: "grid",
   content: "file",
   keyword: "key",
-  formatting: "layout",
-  impact: "light",
 };
 
-const EMPTY_SECTIONS: ResumeSections = {
-  summary: "",
-  experience: "",
-  skills: "",
-  education: "",
+const GRADE_CONFIG: Record<string, { color: string; label: string }> = {
+  A: { color: "#10B981", label: "Excellent" },
+  B: { color: "#7C3AED", label: "Good" },
+  C: { color: "#F59E0B", label: "Average" },
+  D: { color: "#F97316", label: "Below Average" },
+  F: { color: "#EF4444", label: "Needs Major Work" },
 };
+
 
 const TEMPLATES: ExportOptions["template"][] = ["Modern", "Classic", "Minimal", "ATS-Safe"];
 const ACCENT_COLORS = ["#7C3AED", "#06B6D4", "#F43F5E", "#10B981", "#C4B5FD"];
@@ -88,12 +94,7 @@ function severityClass(severity: string) {
   return severity.toLowerCase().replace(/\s+/g, "-");
 }
 
-function describeScore(score: number) {
-  if (score >= 85) return { label: "Standout Candidate", blurb: "You're in the top 5% of applicants." };
-  if (score >= 70) return { label: "Strong Candidate", blurb: "You're in the top 15% of applicants." };
-  if (score >= 55) return { label: "Solid Draft", blurb: "A few sharpenings away from a top-tier resume." };
-  return { label: "Needs Work", blurb: "Let's fix the essentials to move you forward." };
-}
+
 
 function errorMessage(err: unknown, fallback: string) {
   if (err instanceof ApiError) return err.message || fallback;
@@ -101,38 +102,69 @@ function errorMessage(err: unknown, fallback: string) {
   return fallback;
 }
 
-function AutoResizeTextarea({
-  value,
-  onChange,
-  onBlur,
-  autoFocus,
-  placeholder,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  onBlur?: () => void;
-  autoFocus?: boolean;
-  placeholder?: string;
+function ResumeViewer({ resume, user, targetRole, jobTitle }: {
+  resume: Resume;
+  user: PublicUser;
+  targetRole: string;
+  jobTitle: string;
 }) {
-  const ref = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${el.scrollHeight}px`;
-  }, [value]);
+  const sections = resume.sections;
+  const skills = (sections.skills || "")
+    .split(/[,\n]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const experienceLines = (sections.experience || "")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+
   return (
-    <textarea
-      ref={ref}
-      className="resume-editor"
-      value={value}
-      placeholder={placeholder}
-      onChange={(e) => onChange(e.target.value)}
-      onBlur={onBlur}
-      autoFocus={autoFocus}
-      spellCheck
-      rows={3}
-    />
+    <article className="resume-viewer">
+      <header className="rv-header">
+        <div className="rv-avatar">{(user.name || "?")[0].toUpperCase()}</div>
+        <div>
+          <h2>{user.name || "Your Name"}</h2>
+          <p>{targetRole || jobTitle || "Your Target Role"}</p>
+          <span>{user.email}</span>
+        </div>
+      </header>
+
+      {sections.summary && (
+        <div className="rv-section">
+          <div className="rv-section-label">Summary</div>
+          <p className="rv-summary-text">{sections.summary}</p>
+        </div>
+      )}
+
+      {experienceLines.length > 0 && (
+        <div className="rv-section">
+          <div className="rv-section-label">Experience</div>
+          <ul className="rv-exp-list">
+            {experienceLines.map((line, i) => (
+              <li key={i}>{line}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {skills.length > 0 && (
+        <div className="rv-section">
+          <div className="rv-section-label">Skills</div>
+          <div className="rv-skill-chips">
+            {skills.map((skill, i) => (
+              <span key={i} className="rv-skill-chip">{skill}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {sections.education && (
+        <div className="rv-section">
+          <div className="rv-section-label">Education</div>
+          <p className="rv-education-text">{sections.education}</p>
+        </div>
+      )}
+    </article>
   );
 }
 
@@ -176,10 +208,6 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
 
   // ---- editor state ----------------------------------------------------
   const [activeTab, setActiveTab] = useState<TabKey>("Score");
-  const [editing, setEditing] = useState<ResumeSectionKey | null>(null);
-  const [sectionDrafts, setSectionDrafts] = useState<ResumeSections>(EMPTY_SECTIONS);
-  const [dirty, setDirty] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [accordion, setAccordion] = useState<string>("Behavioral");
 
   // ---- download modal --------------------------------------------------
@@ -214,13 +242,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
     };
   }, [mobileNavOpen]);
 
-  // Keep drafts in sync with the loaded resume.
-  useEffect(() => {
-    if (resume) {
-      setSectionDrafts(resume.sections);
-      setDirty(false);
-    }
-  }, [resume?.id, resume?.updatedAt]); // eslint-disable-line react-hooks/exhaustive-deps
+
 
   const runAnalyze = useCallback(
     async (resumeId: string) => {
@@ -345,31 +367,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
     setJobDescription("");
   }
 
-  // ---- resume editing --------------------------------------------------
-
-  function onSectionChange(section: ResumeSectionKey, value: string) {
-    setSectionDrafts((current) => ({ ...current, [section]: value }));
-    setDirty(true);
-  }
-
-  async function handleSave() {
-    if (!resume || saving) return;
-    setSaving(true);
-    try {
-      const { resume: next } = await patchResume(resume.id, sectionDrafts);
-      setResume(next);
-      setDirty(false);
-      push({ kind: "success", title: "Changes saved" });
-    } catch (err) {
-      push({
-        kind: "error",
-        title: "Save failed",
-        message: errorMessage(err, "Please try saving again."),
-      });
-    } finally {
-      setSaving(false);
-    }
-  }
+  // ---- resume editing removed (read-only viewer) -----------------------
 
   // ---- analysis / suggestions / interview / keywords -------------------
 
@@ -622,12 +620,6 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
 
   // ---- derived ---------------------------------------------------------
 
-  const scoreMeta = analysis ? describeScore(analysis.overallScore) : null;
-
-  const resumeDisplay: ResumeSections = editing
-    ? sectionDrafts
-    : resume?.sections || EMPTY_SECTIONS;
-
   const groupedQuestions = useMemo(() => {
     const byGroup: Record<string, InterviewQuestion[]> = {};
     for (const g of questionGroupOrder) byGroup[g] = [];
@@ -718,7 +710,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
                   id="ob-file-input"
                   type="file"
                   accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => setFile(e.target.files?.[0] || null)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFile(e.target.files?.[0] || null)}
                 />
                 <div className="ob-dropzone-inner">
                   {file ? (
@@ -887,7 +879,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
                 <FiMenu size={18} />
               </button>
               <div>
-                <small>Live resume editor</small>
+                <small>Resume Preview</small>
                 <h1>{resumeFileName}</h1>
               </div>
               <div className="topbar-actions">
@@ -903,95 +895,18 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
               </div>
             </div>
 
-            <article className="resume-paper">
-              <header>
-                <h2>{headerName}</h2>
-                <p>{targetRole || jobTitle || "Your next role"}</p>
-                <span>{user.email}</span>
-              </header>
+            <ResumeViewer
+              resume={resume}
+              user={user}
+              targetRole={targetRole}
+              jobTitle={jobTitle}
+            />
 
-              {(["experience", "summary", "skills", "education"] as ResumeSectionKey[]).map(
-                (section) => {
-                  const isEditing = editing === section;
-                  const sectionDirty =
-                    (sectionDrafts[section] || "") !== (resume.sections[section] || "");
-                  return (
-                  <section
-                    key={section}
-                    className={`resume-section ${isEditing ? "editing" : ""}`}
-                    onClick={() => !isEditing && setEditing(section)}
-                  >
-                    <div className="resume-section-head">
-                      <h3>{section}</h3>
-                      <span className="resume-section-status">
-                        {isEditing
-                          ? sectionDirty
-                            ? "Editing • unsaved"
-                            : "Editing"
-                          : sectionDirty
-                            ? "Unsaved"
-                            : ""}
-                      </span>
-                    </div>
-                    <div className="floating-toolbar" aria-label={`${section} tools`}>
-                      <button onClick={(e) => { e.stopPropagation(); setEditing(section); }}>
-                        <Icon name="edit" /> Edit
-                      </button>
-                      <button onClick={(e) => { e.stopPropagation(); setActiveTab("Suggestions"); }}>
-                        <Icon name="spark" /> Improve
-                      </button>
-                    </div>
-                    {isEditing ? (
-                      <AutoResizeTextarea
-                        value={sectionDrafts[section]}
-                        onChange={(v) => onSectionChange(section, v)}
-                        onBlur={() => {
-                          setEditing(null);
-                          if (sectionDirty) void handleSave();
-                        }}
-                        autoFocus
-                        placeholder={`Add your ${section}…`}
-                      />
-                    ) : section === "experience" ? (
-                      <ul>
-                        {(resumeDisplay.experience || "").split("\n").map((line, idx) =>
-                          line.trim() ? <li key={`${idx}-${line}`}>{line}</li> : null,
-                        )}
-                        {!resumeDisplay.experience && (
-                          <li className="empty-line">Click to add experience.</li>
-                        )}
-                      </ul>
-                    ) : section === "skills" ? (
-                      <div className="skill-tags">
-                        {(resumeDisplay.skills || "")
-                          .split(/[,\n]/)
-                          .map((s) => s.trim())
-                          .filter(Boolean)
-                          .map((skill, idx) => (
-                            <span key={`${idx}-${skill}`}>{skill}</span>
-                          ))}
-                        {!resumeDisplay.skills && (
-                          <span className="empty-line">Click to add skills.</span>
-                        )}
-                      </div>
-                    ) : (
-                      <p>{resumeDisplay[section] || <em>Click to add {section}.</em>}</p>
-                    )}
-                  </section>
-                  );
-                },
-              )}
-
+            <div className="viewer-download-bar">
               <button className="download-paper" onClick={() => setDownloadOpen(true)}>
                 <Icon name="download" /> Download as PDF
               </button>
-            </article>
-
-            {dirty && (
-              <button className="save-float" onClick={handleSave} disabled={saving}>
-                <Icon name="file" /> {saving ? "Saving…" : "Save Changes"}
-              </button>
-            )}
+            </div>
           </section>
 
           <aside className="analysis-panel">
@@ -1018,12 +933,66 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
                       <strong>{analysis.overallScore}</strong>
                       <span>/100</span>
                     </div>
-                    {scoreMeta && (
+                    {/* Score dial + grade */}
+                    <div className="score-header">
+                      <div
+                        className="score-dial"
+                        style={{ "--score": analysis.overallScore } as React.CSSProperties}
+                      >
+                        <strong>{analysis.overallScore}</strong>
+                        <span>/100</span>
+                      </div>
+                      {analysis.grade && (
+                        <div
+                          className="grade-badge"
+                          style={{ "--grade-color": GRADE_CONFIG[analysis.grade]?.color || "#7C3AED" } as React.CSSProperties}
+                        >
+                          <span className="grade-letter">{analysis.grade}</span>
+                          <span className="grade-label">{GRADE_CONFIG[analysis.grade]?.label}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Verdict */}
+                    {analysis.verdict && (
+                      <div className="verdict-card">
+                        <Icon name="brain" />
+                        <p>&ldquo;{analysis.verdict}&rdquo;</p>
+                      </div>
+                    )}
+
+                    {/* ATS stats */}
+                    {(analysis.atsPassProbability || analysis.estimatedInterviewRate) && (
+                      <div className="ats-stats-row">
+                        {analysis.atsPassProbability && (
+                          <div className={`ats-stat ats-${analysis.atsPassProbability}`}>
+                            <span className="ats-stat-label">ATS Pass</span>
+                            <b className="ats-stat-value">{analysis.atsPassProbability.toUpperCase()}</b>
+                          </div>
+                        )}
+                        {analysis.estimatedInterviewRate && (
+                          <div className="ats-stat">
+                            <span className="ats-stat-label">Interview Rate</span>
+                            <b className="ats-stat-value">{analysis.estimatedInterviewRate}</b>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Top 3 priorities */}
+                    {analysis.top3Priorities && analysis.top3Priorities.length > 0 && (
                       <>
-                        <h2>&quot;{scoreMeta.label}&quot;</h2>
-                        <p>{scoreMeta.blurb}</p>
+                        <h3 className="panel-section-title">🎯 Top Priorities</h3>
+                        <ol className="top-priorities-list">
+                          {analysis.top3Priorities.map((p, i) => (
+                            <li key={i}><span>{i + 1}</span>{p}</li>
+                          ))}
+                        </ol>
                       </>
                     )}
+
+                    {/* 8 Dimension bars */}
+                    <h3 className="panel-section-title">📊 Dimension Breakdown</h3>
                     <div className="score-list">
                       {analysis.bars.map((bar) => (
                         <div key={bar.key}>
@@ -1032,12 +1001,14 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
                           </span>
                           <b>{bar.value}%</b>
                           <em>
-                            <i style={{ width: `${bar.value}%` }} />
+                            <i style={{ width: `${bar.value}%`, background: bar.value >= 70 ? "#10B981" : bar.value >= 40 ? "#F59E0B" : "#EF4444" }} />
                           </em>
                         </div>
                       ))}
                     </div>
-                    <h3>What&apos;s Holding You Back</h3>
+
+                    {/* Rich issues */}
+                    <h3 className="panel-section-title">⚠️ Issues Found</h3>
                     {analysis.issues.length === 0 && (
                       <div className="win-card">
                         <Icon name="check" /> No critical issues found.
@@ -1048,31 +1019,76 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
                         className={`issue-card ${severityClass(issue.severity)}`}
                         key={`${idx}-${issue.title}`}
                       >
-                        <span>{issue.severity}</span>
-                        <b>{issue.title}</b>
-                        <p>{issue.body}</p>
+                        <div className="issue-card-head">
+                          <span className="issue-severity">{issue.severity}</span>
+                          {issue.category && <span className="issue-category">{issue.category}</span>}
+                        </div>
+                        <b className="issue-title">{issue.title}</b>
+                        {issue.location && <small className="issue-location">📍 {issue.location}</small>}
+                        <p className="issue-description">{issue.description || issue.body}</p>
+                        {issue.original_text && (
+                          <div className="issue-original">
+                            <span>Original:</span>
+                            <del>{issue.original_text}</del>
+                          </div>
+                        )}
+                        {issue.example_fix && (
+                          <div className="issue-fix">
+                            <span>Better:</span>
+                            <q>{issue.example_fix}</q>
+                          </div>
+                        )}
+                        {issue.fix_instruction && (
+                          <p className="issue-instruction">💡 {issue.fix_instruction}</p>
+                        )}
                         <button
                           onClick={() => {
-                            setEditing("experience");
                             setActiveTab("Suggestions");
                             if (!suggestionsLoaded) loadSuggestions();
                           }}
                         >
-                          Fix It
+                          Get AI Fix
                         </button>
                       </div>
                     ))}
-                    <h3>What You&apos;re Doing Well</h3>
-                    {analysis.wins.length === 0 ? (
-                      <div className="win-card">
-                        <Icon name="check" /> Strong foundations to build on.
-                      </div>
-                    ) : (
+
+                    {/* Interview red flags */}
+                    {analysis.interviewRedFlags && analysis.interviewRedFlags.length > 0 && (
+                      <>
+                        <h3 className="panel-section-title">🚩 Interview Red Flags</h3>
+                        <div className="red-flags-list">
+                          {analysis.interviewRedFlags.map((flag, i) => (
+                            <div className="red-flag-item" key={i}>
+                              <span>⚠</span>
+                              <p>{flag}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+
+                    {/* Positives */}
+                    <h3 className="panel-section-title">✅ What You&apos;re Doing Well</h3>
+                    {(analysis.positives && analysis.positives.length > 0) ? (
+                      analysis.positives.map((item, idx) => (
+                        <div className="win-card" key={`${idx}-${item.title}`}>
+                          <Icon name="check" />
+                          <div>
+                            <b>{item.title}</b>
+                            {item.description && <p>{item.description}</p>}
+                          </div>
+                        </div>
+                      ))
+                    ) : analysis.wins.length > 0 ? (
                       analysis.wins.map((item, idx) => (
                         <div className="win-card" key={`${idx}-${item}`}>
                           <Icon name="check" /> {item}
                         </div>
                       ))
+                    ) : (
+                      <div className="win-card">
+                        <Icon name="check" /> Strong foundations to build on.
+                      </div>
                     )}
                   </>
                 ) : (

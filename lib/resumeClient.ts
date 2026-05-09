@@ -45,20 +45,50 @@ export type Resume = {
 };
 
 export type AnalysisBar = { key: string; label: string; value: number };
+
 export type AnalysisIssue = {
   id?: string;
   severity: "Critical" | "Moderate" | "Minor";
+  category?: string;
   title: string;
-  body: string;
+  body?: string;
+  description?: string;
+  original_text?: string;
+  location?: string;
+  fix_instruction?: string;
+  example_fix?: string;
 };
+
+export type DimensionScore = { score: number; max: number };
+
+export type DimensionScores = {
+  impact_quantification: DimensionScore;
+  action_verbs: DimensionScore;
+  bullet_quality: DimensionScore;
+  ats_keywords: DimensionScore;
+  leadership_scope: DimensionScore;
+  formatting: DimensionScore;
+  summary: DimensionScore;
+  projects: DimensionScore;
+};
+
+export type AnalysisPositive = { title: string; description: string };
 
 export type Analysis = {
   id: string;
   resumeId: string;
   overallScore: number;
+  grade?: "A" | "B" | "C" | "D" | "F" | null;
+  verdict?: string | null;
   bars: AnalysisBar[];
   issues: AnalysisIssue[];
   wins: string[];
+  dimensionScores?: DimensionScores | null;
+  positives?: AnalysisPositive[];
+  top3Priorities?: string[];
+  interviewRedFlags?: string[];
+  atsPassProbability?: "low" | "medium" | "high" | null;
+  estimatedInterviewRate?: string | null;
   createdAt: string;
 };
 
