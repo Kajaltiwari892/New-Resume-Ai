@@ -17,6 +17,7 @@ import {
   FiLogOut,
   FiMenu,
   FiMessageSquare,
+  FiPlus,
   FiSearch,
   FiSettings,
   FiX,
@@ -27,7 +28,6 @@ import { Icon, type IconName } from "./Icon";
 import {
   analyzingMessages,
   questionGroupOrder,
-  type ResumeSectionKey,
 } from "./data";
 import { ToastStack, useToasts } from "./Toast";
 import { ApiError } from "@/lib/api";
@@ -55,7 +55,6 @@ import {
   type Profile,
   type Resume,
   type ResumeErrorRecord,
-  type ResumeSections,
   type Suggestion,
 } from "@/lib/resumeClient";
 
@@ -361,10 +360,29 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
     setAnalysis(null);
     setSuggestions([]);
     setSuggestionsLoaded(false);
+    setSuggestionsLoading(false);
+    setResumeErrors([]);
+    setErrorsLoaded(false);
+    setErrorsLoading(false);
+    setRewritingErrorId(null);
+    setApplyingErrorId(null);
     setInterviewQuestions([]);
     setInterviewLoaded(false);
+    setInterviewLoading(false);
     setKeywordMatch(null);
+    setKeywordLoading(false);
     setJobDescription("");
+  }
+
+  function handleStartNewResume() {
+    setFile(null);
+    setPastedText("");
+    setUploadTab("file");
+    setResume(null);
+    resetDerivedData();
+    setActiveTab("Score");
+    setMobileNavOpen(false);
+    setMode("upload");
   }
 
   // ---- resume editing removed (read-only viewer) -----------------------
@@ -477,13 +495,13 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
   useEffect(() => {
     if (mode !== "dashboard" || !resume) return;
     if (activeTab === "Errors" && !errorsLoaded && !errorsLoading) {
-      loadErrors();
+      void Promise.resolve().then(loadErrors);
     }
     if (activeTab === "Suggestions" && !suggestionsLoaded && !suggestionsLoading) {
-      loadSuggestions();
+      void Promise.resolve().then(loadSuggestions);
     }
     if (activeTab === "Interview" && !interviewLoaded && !interviewLoading) {
-      loadInterview();
+      void Promise.resolve().then(loadInterview);
     }
   }, [
     activeTab,
@@ -524,20 +542,14 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
   async function handleApplyAll() {
     if (!resume) return;
     try {
-      const { resume: nextResume, suggestions: nextSuggestions } =
-        await applyAllSuggestionsApi(resume.id);
+      const { resume: nextResume, applied } = await applyAllSuggestionsApi(resume.id);
       setResume(nextResume);
-      if (nextSuggestions) {
-        setSuggestions((list) =>
-          list.map((s) => {
-            const updated = nextSuggestions.find((n) => n.id === s.id);
-            return updated ?? { ...s, applied: true };
-          }),
-        );
-      } else {
-        setSuggestions((list) => list.map((s) => ({ ...s, applied: true })));
-      }
-      push({ kind: "success", title: "All suggestions applied" });
+      setSuggestions((list) => list.map((s) => ({ ...s, applied: true })));
+      push({
+        kind: "success",
+        title: "All suggestions applied",
+        message: `${applied} improvement${applied === 1 ? "" : "s"} applied.`,
+      });
     } catch (err) {
       push({
         kind: "error",
@@ -553,8 +565,8 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
     if (!resume) return;
     const text = jobDescription.trim();
     if (text.length < 30) {
-      setKeywordMatch(null);
-      return;
+      const clearTimer = window.setTimeout(() => setKeywordMatch(null), 0);
+      return () => window.clearTimeout(clearTimer);
     }
     const myId = ++keywordRequestId.current;
     const timer = window.setTimeout(async () => {
@@ -678,7 +690,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
 
             <div className="ob-header">
               <h1>Analyze your resume with AI</h1>
-              <p>Upload your resume and get an instant ATS score, improvement suggestions, and interview prep.</p>
+              <p>Upload a PDF or DOCX, then get a focused ATS score, fixes, keyword gaps, and interview prep in one workspace.</p>
             </div>
 
             {/* Upload tabs */}
@@ -747,7 +759,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
             {/* Supported formats hint */}
             <p className="ob-hint">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
-              Your data is never stored beyond the session. Supports PDF and DOCX.
+              Files are parsed securely and attached only to your ResumeIQ account.
             </p>
 
             {/* CTA */}
@@ -824,6 +836,14 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
                 </button>
               </div>
               <nav>
+                <button
+                  type="button"
+                  className="sidebar-new-score"
+                  onClick={handleStartNewResume}
+                >
+                  <FiPlus size={16} />
+                  <span>Check New Resume Score</span>
+                </button>
                 {(
                   [
                     [FiGrid, "Dashboard", "/dashboard"],

@@ -38,7 +38,6 @@ app.use(
       if (isDev && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
         return cb(null, true);
       }
-      // eslint-disable-next-line no-console
       console.warn(`[cors] blocked origin: ${origin}`);
       return cb(null, false);
     },
@@ -69,7 +68,6 @@ app.use(errorHandler);
 async function start() {
   await connectDB();
   app.listen(env.port, () => {
-    // eslint-disable-next-line no-console
     console.log(`[auth] listening on http://localhost:${env.port}`);
   });
 }
@@ -77,11 +75,9 @@ async function start() {
 start();
 
 process.on("unhandledRejection", (err) => {
-  // eslint-disable-next-line no-console
   console.error("[unhandledRejection]", err);
 });
 process.on("uncaughtException", (err) => {
-  // eslint-disable-next-line no-console
   console.error("[uncaughtException]", err);
   process.exit(1);
 });

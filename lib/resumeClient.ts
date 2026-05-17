@@ -262,7 +262,7 @@ export function applySuggestion(resumeId: string, suggestionId: string) {
 }
 
 export function applyAllSuggestions(resumeId: string) {
-  return api<{ suggestions: Suggestion[]; resume: Resume }>(
+  return api<{ applied: number; resume: Resume }>(
     `/api/resumes/${resumeId}/suggestions/apply-all`,
     { method: "POST", auth: true },
   );

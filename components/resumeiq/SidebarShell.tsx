@@ -10,6 +10,7 @@ import {
   FiLogOut,
   FiMenu,
   FiMessageSquare,
+  FiPlus,
   FiSettings,
   FiX,
 } from "react-icons/fi";
@@ -100,6 +101,14 @@ export default function SidebarShell({
               </button>
             </div>
             <nav>
+              <Link
+                href="/dashboard"
+                className="sidebar-new-score"
+                onClick={() => setMobileNavOpen(false)}
+              >
+                <FiPlus size={16} />
+                <span>Check New Resume Score</span>
+              </Link>
               {NAV_ITEMS.map(({ href, icon: NavIcon, label }) => (
                 <Link
                   key={href}

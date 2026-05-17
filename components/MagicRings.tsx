@@ -109,19 +109,82 @@ export default function MagicRings({
   clickBurst = false,
 }: MagicRingsProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
-  const propsRef = useRef<Required<MagicRingsProps> | null>(null);
+  const propsRef = useRef<Required<MagicRingsProps>>({
+    color,
+    colorTwo,
+    speed,
+    ringCount,
+    attenuation,
+    lineThickness,
+    baseRadius,
+    radiusStep,
+    scaleRate,
+    opacity,
+    blur,
+    noiseAmount,
+    rotation,
+    ringGap,
+    fadeIn,
+    fadeOut,
+    followMouse,
+    mouseInfluence,
+    hoverScale,
+    parallax,
+    clickBurst,
+  });
   const mouseRef = useRef([0, 0]);
   const smoothMouseRef = useRef([0, 0]);
   const hoverAmountRef = useRef(0);
   const isHoveredRef = useRef(false);
   const burstRef = useRef(0);
 
-  propsRef.current = {
-    color, colorTwo, speed, ringCount, attenuation, lineThickness,
-    baseRadius, radiusStep, scaleRate, opacity, blur, noiseAmount,
-    rotation, ringGap, fadeIn, fadeOut, followMouse, mouseInfluence,
-    hoverScale, parallax, clickBurst,
-  };
+  useEffect(() => {
+    propsRef.current = {
+      color,
+      colorTwo,
+      speed,
+      ringCount,
+      attenuation,
+      lineThickness,
+      baseRadius,
+      radiusStep,
+      scaleRate,
+      opacity,
+      blur,
+      noiseAmount,
+      rotation,
+      ringGap,
+      fadeIn,
+      fadeOut,
+      followMouse,
+      mouseInfluence,
+      hoverScale,
+      parallax,
+      clickBurst,
+    };
+  }, [
+    color,
+    colorTwo,
+    speed,
+    ringCount,
+    attenuation,
+    lineThickness,
+    baseRadius,
+    radiusStep,
+    scaleRate,
+    opacity,
+    blur,
+    noiseAmount,
+    rotation,
+    ringGap,
+    fadeIn,
+    fadeOut,
+    followMouse,
+    mouseInfluence,
+    hoverScale,
+    parallax,
+    clickBurst,
+  ]);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -210,7 +273,7 @@ export default function MagicRings({
     let frameId: number;
     const animate = (t: number) => {
       frameId = requestAnimationFrame(animate);
-      const p = propsRef.current!;
+      const p = propsRef.current;
 
       smoothMouseRef.current[0] += (mouseRef.current[0] - smoothMouseRef.current[0]) * 0.08;
       smoothMouseRef.current[1] += (mouseRef.current[1] - smoothMouseRef.current[1]) * 0.08;

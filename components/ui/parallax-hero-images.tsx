@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState, useMemo, useCallback, memo } from "react";
+import React, { useEffect, useMemo, memo } from "react";
 import {
   motion,
   useMotionValue,
@@ -173,6 +173,7 @@ const ParallaxImage = memo(function ParallaxImage({
         ease: [0.25, 0.1, 0.25, 1],
       }}
     >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={src}
         alt=""

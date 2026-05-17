@@ -4,8 +4,9 @@ export function notFound(_req, res) {
   res.status(404).json({ error: { code: "NOT_FOUND", message: "Not found" } });
 }
 
-// eslint-disable-next-line no-unused-vars
 export function errorHandler(err, req, res, _next) {
+  void _next;
+
   if (err instanceof HttpError) {
     return res.status(err.status).json({
       error: { code: err.code, message: err.message, details: err.details },
@@ -24,7 +25,6 @@ export function errorHandler(err, req, res, _next) {
     });
   }
 
-  // eslint-disable-next-line no-console
   console.error("[unhandled]", err);
   return res.status(500).json({
     error: { code: "INTERNAL_ERROR", message: "Something went wrong" },

@@ -221,7 +221,6 @@ export async function forgotPassword(req, res) {
 
   // In production, email the link. For now, log it in dev only.
   if (env.nodeEnv !== "production") {
-    // eslint-disable-next-line no-console
     console.log(
       `[dev] password reset token for ${email}: ${rawToken} (expires in 30m)`,
     );

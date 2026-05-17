@@ -349,6 +349,8 @@ function capitalize(str) {
 }
 
 export async function generateSuggestions(resume, _analysis) {
+  void _analysis;
+
   if (!hasKey()) return generateSuggestionsHeuristic(resume);
   try {
     // Gemini requires a root OBJECT schema — top-level arrays return unreliably (often 1 item).

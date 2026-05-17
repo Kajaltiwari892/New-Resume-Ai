@@ -71,7 +71,7 @@ export async function uploadResume(req, res) {
   const sections = splitIntoSections(text);
   const resume = await Resume.create({
     userId: req.user._id,
-    name: req.file.originalname || "Uploaded Resume",
+    name: String(req.body.name || req.file.originalname || "Uploaded Resume").trim().slice(0, 200),
     source: "file",
     mimeType: req.file.mimetype,
     rawText: text,
@@ -105,6 +105,7 @@ export async function deleteResume(req, res) {
     Resume.deleteOne({ _id: resumeId }),
     Analysis.deleteMany({ resumeId }),
     Suggestion.deleteMany({ resumeId }),
+    ResumeError.deleteMany({ resumeId }),
     InterviewQuestion.deleteMany({ resumeId }),
     KeywordMatch.deleteMany({ resumeId }),
   ]);

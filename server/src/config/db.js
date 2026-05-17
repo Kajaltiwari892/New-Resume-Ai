@@ -10,20 +10,16 @@ export async function connectDB() {
       socketTimeoutMS: 45_000,
       autoIndex: env.nodeEnv !== "production",
     });
-    // eslint-disable-next-line no-console
     console.log("[db] connected");
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.error("[db] connection error:", err.message);
     process.exit(1);
   }
 
   mongoose.connection.on("error", (err) => {
-    // eslint-disable-next-line no-console
     console.error("[db] runtime error:", err.message);
   });
   mongoose.connection.on("disconnected", () => {
-    // eslint-disable-next-line no-console
     console.warn("[db] disconnected");
   });
 }

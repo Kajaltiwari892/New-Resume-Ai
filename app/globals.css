@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -3992,16 +3991,24 @@ button:hover {
   display: grid;
   place-items: center;
   padding: 2rem 1rem;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(124, 58, 237, 0.14), transparent 24rem),
+    radial-gradient(circle at 92% 82%, rgba(6, 182, 212, 0.08), transparent 22rem),
+    #050505;
 }
 
 .ob-card {
   width: min(520px, 100%);
-  border-radius: 1.5rem;
+  border-radius: 1rem;
   padding: 2.5rem 2rem;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
   animation: fade-slide 280ms ease;
+  background: linear-gradient(180deg, rgba(17, 17, 17, 0.96), rgba(5, 5, 5, 0.98));
+  border: 1px solid #1f1f1f;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: none;
 }
 
 .ob-brand {
@@ -4034,10 +4041,10 @@ button:hover {
 .ob-tabs {
   display: flex;
   gap: 0.5rem;
-  background: rgba(255, 255, 255, 0.04);
+  background: #0a0a0a;
   border-radius: 0.75rem;
   padding: 0.3rem;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid #222;
 }
 
 .ob-tabs button {
@@ -4057,9 +4064,9 @@ button:hover {
 }
 
 .ob-tabs button.active {
-  background: rgba(124, 58, 237, 0.22);
-  border: 1px solid rgba(124, 58, 237, 0.4);
-  color: #c4b5fd;
+  background: #fff;
+  border: 1px solid #fff;
+  color: #050505;
 }
 
 .ob-tabs button:hover:not(.active) {
@@ -4072,16 +4079,16 @@ button:hover {
   position: relative;
   display: block;
   cursor: pointer;
-  border-radius: 1rem;
-  border: 1.5px dashed rgba(124, 58, 237, 0.4);
-  background: rgba(124, 58, 237, 0.04);
+  border-radius: 0.9rem;
+  border: 1.5px dashed #333;
+  background: #080808;
   transition: border-color 180ms, background 180ms;
   overflow: hidden;
 }
 
 .ob-dropzone:hover {
-  border-color: rgba(124, 58, 237, 0.7);
-  background: rgba(124, 58, 237, 0.08);
+  border-color: #777;
+  background: #0d0d0d;
 }
 
 .ob-dropzone input {
@@ -4112,8 +4119,8 @@ button:hover {
   width: 3.5rem;
   height: 3.5rem;
   border-radius: 0.85rem;
-  background: rgba(124, 58, 237, 0.15);
-  color: #c4b5fd;
+  background: #141414;
+  color: #fff;
   margin-bottom: 0.25rem;
 }
 
@@ -4155,8 +4162,8 @@ button:hover {
   margin-top: 0.25rem;
   padding: 0.45rem 1.1rem;
   border-radius: 0.55rem;
-  border: 1px solid rgba(124, 58, 237, 0.45);
-  color: #c4b5fd;
+  border: 1px solid #333;
+  color: #fff;
   font-size: 0.82rem;
   font-weight: 600;
 }
@@ -4167,8 +4174,8 @@ button:hover {
   min-height: 10rem;
   padding: 1rem;
   border-radius: 0.85rem;
-  border: 1.5px solid rgba(124, 58, 237, 0.3);
-  background: rgba(6, 8, 14, 0.8);
+  border: 1.5px solid #222;
+  background: #080808;
   color: white;
   font-size: 0.9rem;
   line-height: 1.6;
@@ -4183,8 +4190,8 @@ button:hover {
 }
 
 .ob-paste-area:focus {
-  border-color: rgba(124, 58, 237, 0.7);
-  box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.1);
+  border-color: #666;
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.05);
 }
 
 /* Hint */
@@ -4206,19 +4213,19 @@ button:hover {
   width: 100%;
   min-height: 3.4rem;
   border: 0;
-  border-radius: 0.85rem;
-  background: linear-gradient(135deg, #7c3aed 0%, #9333ea 50%, #06b6d4 100%);
-  color: white;
+  border-radius: 0.75rem;
+  background: #fff;
+  color: #050505;
   font-size: 1rem;
   font-weight: 700;
   letter-spacing: -0.01em;
-  box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.4), 0 12px 40px rgba(124, 58, 237, 0.36);
+  box-shadow: 0 12px 40px rgba(255, 255, 255, 0.08);
   transition: transform 200ms, box-shadow 200ms, opacity 200ms;
 }
 
 .ob-analyze-btn:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.6), 0 18px 52px rgba(124, 58, 237, 0.5);
+  box-shadow: 0 18px 52px rgba(255, 255, 255, 0.12);
 }
 
 .ob-analyze-btn:disabled {
@@ -4249,6 +4256,12 @@ button:hover {
   color: rgba(255, 255, 255, 0.35);
   font-weight: 500;
   margin-top: -0.25rem;
+}
+
+.ob-trust span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 /* ─── End Onboarding Card ────────────────────────────────────────────────── */
@@ -4822,6 +4835,36 @@ button:hover {
 .dashboard .sidebar nav a.active {
   background: #1a1a1a;
   color: #fff;
+}
+
+.dashboard .sidebar-new-score {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  width: 100%;
+  min-height: 2.55rem;
+  padding: 0.65rem 0.8rem;
+  margin-bottom: 0.55rem;
+  border: 1px solid #fff;
+  border-radius: 8px;
+  background: #fff;
+  color: #050505;
+  font-size: 0.84rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: background 0.15s, border-color 0.15s, transform 0.15s;
+}
+
+.dashboard .sidebar-new-score:hover {
+  background: #e8e8e8;
+  border-color: #e8e8e8;
+  color: #050505;
+  transform: translateY(-1px);
+}
+
+.dashboard .sidebar-new-score svg {
+  flex-shrink: 0;
 }
 
 .dashboard .sidebar nav a svg {
