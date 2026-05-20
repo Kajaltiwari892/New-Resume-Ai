@@ -23,6 +23,7 @@ import {
   FiX,
   FiZap,
 } from "react-icons/fi";
+import { fetchResumeFileBlob } from "@/lib/resumeClient";
 import { FileSearch } from "lucide-react";
 import { Icon, type IconName } from "./Icon";
 import {
@@ -34,11 +35,7 @@ import { ApiError } from "@/lib/api";
 import { logout, type PublicUser } from "@/lib/authClient";
 import {
   analyzeResume,
-  applyAllSuggestions as applyAllSuggestionsApi,
-  applyErrorFix as applyErrorFixApi,
-  applySuggestion as applySuggestionApi,
   createResumeFromText,
-  downloadResumePdf,
   findErrors as findErrorsApi,
   generateInterviewQuestions as generateInterviewQuestionsApi,
   generateSuggestions as generateSuggestionsApi,
@@ -49,7 +46,6 @@ import {
   rewriteError as rewriteErrorApi,
   uploadResume,
   type Analysis,
-  type ExportOptions,
   type InterviewQuestion,
   type KeywordMatch,
   type Profile,
@@ -85,10 +81,6 @@ const GRADE_CONFIG: Record<string, { color: string; label: string }> = {
 };
 
 
-const TEMPLATES: ExportOptions["template"][] = ["Modern", "Classic", "Minimal", "ATS-Safe"];
-const ACCENT_COLORS = ["#7C3AED", "#06B6D4", "#F43F5E", "#10B981", "#C4B5FD"];
-const FONT_OPTIONS = ["Inter", "IBM Plex Sans", "System UI"];
-
 function severityClass(severity: string) {
   return severity.toLowerCase().replace(/\s+/g, "-");
 }
@@ -101,68 +93,83 @@ function errorMessage(err: unknown, fallback: string) {
   return fallback;
 }
 
-function ResumeViewer({ resume, user, targetRole, jobTitle }: {
-  resume: Resume;
-  user: PublicUser;
-  targetRole: string;
-  jobTitle: string;
-}) {
-  const sections = resume.sections;
-  const skills = (sections.skills || "")
-    .split(/[,\n]/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-  const experienceLines = (sections.experience || "")
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean);
+function ResumeFileViewer({ resume }: { resume: Resume }) {
+  const [fileUrl, setFileUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(() => Boolean(resume.hasFile));
+  const [unavailable, setUnavailable] = useState<boolean>(() => !resume.hasFile);
+
+  useEffect(() => {
+    if (!resume.hasFile) return;
+    let cancelled = false;
+    let url: string | null = null;
+    (async () => {
+      try {
+        const blob = await fetchResumeFileBlob(resume.id);
+        if (cancelled) return;
+        if (!blob) {
+          setUnavailable(true);
+          setLoading(false);
+          return;
+        }
+        url = URL.createObjectURL(blob);
+        setFileUrl(url);
+        setLoading(false);
+      } catch {
+        if (!cancelled) {
+          setUnavailable(true);
+          setLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [resume.id, resume.hasFile]);
+
+  const isPdf = (resume.mimeType || "").includes("pdf");
+
+  if (loading) {
+    return (
+      <article className="resume-viewer resume-file-viewer">
+        <p className="muted" style={{ padding: 24 }}>Loading your resume…</p>
+      </article>
+    );
+  }
+
+  if (unavailable || !fileUrl) {
+    return (
+      <article className="resume-viewer resume-file-viewer">
+        <div style={{ padding: 24, textAlign: "center" }}>
+          <p className="muted">Original resume preview isn&apos;t available for this entry.</p>
+          <p className="muted" style={{ marginTop: 8, fontSize: 13 }}>
+            Re-upload your PDF to see it here, or open the Suggestions tab to review insights.
+          </p>
+        </div>
+      </article>
+    );
+  }
+
+  if (isPdf) {
+    return (
+      <article className="resume-viewer resume-file-viewer">
+        <iframe
+          src={fileUrl}
+          title={resume.name || "Resume"}
+          style={{ width: "100%", height: "100%", border: 0, background: "#fff" }}
+        />
+      </article>
+    );
+  }
 
   return (
-    <article className="resume-viewer">
-      <header className="rv-header">
-        <div className="rv-avatar">{(user.name || "?")[0].toUpperCase()}</div>
-        <div>
-          <h2>{user.name || "Your Name"}</h2>
-          <p>{targetRole || jobTitle || "Your Target Role"}</p>
-          <span>{user.email}</span>
-        </div>
-      </header>
-
-      {sections.summary && (
-        <div className="rv-section">
-          <div className="rv-section-label">Summary</div>
-          <p className="rv-summary-text">{sections.summary}</p>
-        </div>
-      )}
-
-      {experienceLines.length > 0 && (
-        <div className="rv-section">
-          <div className="rv-section-label">Experience</div>
-          <ul className="rv-exp-list">
-            {experienceLines.map((line, i) => (
-              <li key={i}>{line}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {skills.length > 0 && (
-        <div className="rv-section">
-          <div className="rv-section-label">Skills</div>
-          <div className="rv-skill-chips">
-            {skills.map((skill, i) => (
-              <span key={i} className="rv-skill-chip">{skill}</span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {sections.education && (
-        <div className="rv-section">
-          <div className="rv-section-label">Education</div>
-          <p className="rv-education-text">{sections.education}</p>
-        </div>
-      )}
+    <article className="resume-viewer resume-file-viewer">
+      <div style={{ padding: 24, textAlign: "center" }}>
+        <p className="muted">Preview isn&apos;t supported for this file type.</p>
+        <a href={fileUrl} download={resume.name} className="primary-button" style={{ marginTop: 12, display: "inline-block" }}>
+          Open original file
+        </a>
+      </div>
     </article>
   );
 }
@@ -179,7 +186,6 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
 
   // ---- profile snapshot (read-only here; editing lives in /onboarding) -
   const [fullName, setFullName] = useState("");
-  const [jobTitle, setJobTitle] = useState("");
   const [targetRole, setTargetRole] = useState("");
   const [dreamCompanies, setDreamCompanies] = useState<string[]>([]);
   const [uploadTab, setUploadTab] = useState<UploadTab>("file");
@@ -197,7 +203,6 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
   const [errorsLoaded, setErrorsLoaded] = useState(false);
   const [errorsLoading, setErrorsLoading] = useState(false);
   const [rewritingErrorId, setRewritingErrorId] = useState<string | null>(null);
-  const [applyingErrorId, setApplyingErrorId] = useState<string | null>(null);
   const [interviewQuestions, setInterviewQuestions] = useState<InterviewQuestion[]>([]);
   const [interviewLoaded, setInterviewLoaded] = useState(false);
   const [interviewLoading, setInterviewLoading] = useState(false);
@@ -208,15 +213,6 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
   // ---- editor state ----------------------------------------------------
   const [activeTab, setActiveTab] = useState<TabKey>("Score");
   const [accordion, setAccordion] = useState<string>("Behavioral");
-
-  // ---- download modal --------------------------------------------------
-  const [downloadOpen, setDownloadOpen] = useState(false);
-  const [downloadTemplate, setDownloadTemplate] =
-    useState<ExportOptions["template"]>("Modern");
-  const [downloadFont, setDownloadFont] = useState<string>("Inter");
-  const [downloadAccent, setDownloadAccent] = useState<string>(ACCENT_COLORS[0]);
-  const [includeAiSummary, setIncludeAiSummary] = useState(true);
-  const [downloading, setDownloading] = useState(false);
 
   // Live-rotating analyzing message.
   useEffect(() => {
@@ -275,7 +271,6 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
         const profile = onboardingRes.profile;
         if (profile) {
           setFullName(profile.fullName || user.name || "");
-          setJobTitle(profile.jobTitle || "");
           setTargetRole(profile.targetRole || "");
           setDreamCompanies(profile.dreamCompanies || []);
         } else {
@@ -365,7 +360,6 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
     setErrorsLoaded(false);
     setErrorsLoading(false);
     setRewritingErrorId(null);
-    setApplyingErrorId(null);
     setInterviewQuestions([]);
     setInterviewLoaded(false);
     setInterviewLoading(false);
@@ -469,28 +463,6 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
     }
   }
 
-  async function handleApplyError(errorId: string) {
-    if (!resume || applyingErrorId) return;
-    setApplyingErrorId(errorId);
-    try {
-      const { resume: nextResume, error: nextError } = await applyErrorFixApi(
-        resume.id,
-        errorId,
-      );
-      setResume(nextResume);
-      setResumeErrors((list) => list.map((e) => (e.id === errorId ? nextError : e)));
-      push({ kind: "success", title: "Fix applied" });
-    } catch (err) {
-      push({
-        kind: "error",
-        title: "Couldn't apply fix",
-        message: errorMessage(err, "Please try again."),
-      });
-    } finally {
-      setApplyingErrorId(null);
-    }
-  }
-
   // Auto-load tabs the first time they're opened.
   useEffect(() => {
     if (mode !== "dashboard" || !resume) return;
@@ -517,47 +489,6 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
     loadSuggestions,
     loadInterview,
   ]);
-
-  async function handleApply(suggestionId: string) {
-    if (!resume) return;
-    try {
-      const { resume: nextResume, suggestion: nextSuggestion } = await applySuggestionApi(
-        resume.id,
-        suggestionId,
-      );
-      setResume(nextResume);
-      setSuggestions((list) =>
-        list.map((s) => (s.id === suggestionId ? nextSuggestion : s)),
-      );
-      push({ kind: "success", title: "Suggestion applied" });
-    } catch (err) {
-      push({
-        kind: "error",
-        title: "Couldn't apply",
-        message: errorMessage(err, "Please try again."),
-      });
-    }
-  }
-
-  async function handleApplyAll() {
-    if (!resume) return;
-    try {
-      const { resume: nextResume, applied } = await applyAllSuggestionsApi(resume.id);
-      setResume(nextResume);
-      setSuggestions((list) => list.map((s) => ({ ...s, applied: true })));
-      push({
-        kind: "success",
-        title: "All suggestions applied",
-        message: `${applied} improvement${applied === 1 ? "" : "s"} applied.`,
-      });
-    } catch (err) {
-      push({
-        kind: "error",
-        title: "Apply-all failed",
-        message: errorMessage(err, "Please try again."),
-      });
-    }
-  }
 
   // Debounced keyword match.
   const keywordRequestId = useRef(0);
@@ -588,39 +519,6 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
     }, 700);
     return () => window.clearTimeout(timer);
   }, [jobDescription, resume, push]);
-
-  // ---- download --------------------------------------------------------
-
-  async function handleDownload() {
-    if (!resume || downloading) return;
-    setDownloading(true);
-    try {
-      const { blob, filename } = await downloadResumePdf(resume.id, {
-        template: downloadTemplate,
-        font: downloadFont,
-        accent: downloadAccent,
-        includeAiSummary,
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      setDownloadOpen(false);
-      push({ kind: "success", title: "PDF ready", message: `Saved as ${filename}` });
-    } catch (err) {
-      push({
-        kind: "error",
-        title: "Download failed",
-        message: errorMessage(err, "Please try again."),
-      });
-    } finally {
-      setDownloading(false);
-    }
-  }
 
   async function handleLogout() {
     try {
@@ -915,18 +813,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
               </div>
             </div>
 
-            <ResumeViewer
-              resume={resume}
-              user={user}
-              targetRole={targetRole}
-              jobTitle={jobTitle}
-            />
-
-            <div className="viewer-download-bar">
-              <button className="download-paper" onClick={() => setDownloadOpen(true)}>
-                <Icon name="download" /> Download as PDF
-              </button>
-            </div>
+            <ResumeFileViewer key={resume.id} resume={resume} />
           </section>
 
           <aside className="analysis-panel">
@@ -1061,14 +948,6 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
                         {issue.fix_instruction && (
                           <p className="issue-instruction">💡 {issue.fix_instruction}</p>
                         )}
-                        <button
-                          onClick={() => {
-                            setActiveTab("Suggestions");
-                            if (!suggestionsLoaded) loadSuggestions();
-                          }}
-                        >
-                          Get AI Fix
-                        </button>
                       </div>
                     ))}
 
@@ -1128,7 +1007,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
                   <div>
                     <h2>Line-level errors</h2>
                     <p className="errors-sub">
-                      Each item is a concrete fix. Click <em>Get AI fix</em>, review, then <em>Apply</em>.
+                      Each item highlights a phrase to rewrite — use these as inspiration when updating your resume.
                     </p>
                   </div>
                   <button
@@ -1152,10 +1031,9 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
                 )}
                 {resumeErrors.map((error, index) => {
                   const isRewriting = rewritingErrorId === error.id;
-                  const isApplying = applyingErrorId === error.id;
                   return (
                     <div
-                      className={`issue-card error-card ${severityClass(error.severity)} ${error.applied ? "applied" : ""}`}
+                      className={`issue-card error-card ${severityClass(error.severity)}`}
                       style={{ "--delay": `${index * 60}ms` } as React.CSSProperties}
                       key={error.id}
                     >
@@ -1168,44 +1046,23 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
                       <p className="error-reason">{error.reason}</p>
 
                       {error.fix && (
-                        <p className="error-fix">{error.fix}</p>
+                        <div className="error-fix-block">
+                          <span className="error-fix-label">Suggested rewrite</span>
+                          <p className="error-fix">{error.fix}</p>
+                        </div>
                       )}
 
-                      <div className="error-actions">
-                        {!error.applied && !error.fix && (
+                      {!error.fix && (
+                        <div className="error-actions">
                           <button
                             type="button"
                             onClick={() => handleRewriteError(error.id)}
                             disabled={isRewriting}
                           >
-                            {isRewriting ? "Generating…" : "Get AI fix"}
+                            {isRewriting ? "Generating…" : "Suggest rewrite"}
                           </button>
-                        )}
-                        {!error.applied && error.fix && (
-                          <>
-                            <button
-                              type="button"
-                              className="primary-button"
-                              onClick={() => handleApplyError(error.id)}
-                              disabled={isApplying}
-                            >
-                              {isApplying ? "Applying…" : "Apply"}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleRewriteError(error.id)}
-                              disabled={isRewriting}
-                            >
-                              {isRewriting ? "…" : "Regenerate"}
-                            </button>
-                          </>
-                        )}
-                        {error.applied && (
-                          <span className="error-applied-badge">
-                            <Icon name="check" /> Applied
-                          </span>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1231,28 +1088,16 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
                   <>
                     <div className="suggestions-header">
                       <span className="suggestions-count">{suggestions.length} improvements found</span>
-                      <button
-                        className="apply-all"
-                        onClick={handleApplyAll}
-                        disabled={suggestions.every((s) => s.applied)}
-                      >
-                        Apply All
-                      </button>
                     </div>
                     {suggestions.map((suggestion, index) => (
                       <div
-                        className={`suggestion-card ${suggestion.applied ? "applied" : ""}`}
+                        className="suggestion-card"
                         style={{ "--delay": `${index * 60}ms` } as React.CSSProperties}
                         key={suggestion.id}
                       >
                         {/* Section badge */}
                         <div className="suggestion-card-head">
                           <span className="suggestion-section-badge">{suggestion.section}</span>
-                          {suggestion.applied && (
-                            <span className="suggestion-applied-badge">
-                              <Icon name="check" /> Applied
-                            </span>
-                          )}
                         </div>
 
                         {/* Why it was flagged */}
@@ -1271,14 +1116,6 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
                           <span>Improved</span>
                           <p>{suggestion.next}</p>
                         </div>
-
-                        <button
-                          className={suggestion.applied ? "" : "primary-button"}
-                          onClick={() => handleApply(suggestion.id)}
-                          disabled={suggestion.applied}
-                        >
-                          {suggestion.applied ? "✓ Applied" : "Apply Fix"}
-                        </button>
                       </div>
                     ))}
                   </>
@@ -1396,106 +1233,6 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
             )}
           </aside>
         </section>
-      )}
-
-      {downloadOpen && resume && (
-        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Download resume">
-          <div className="download-modal">
-            <section className="export-preview">
-              <h2>Export Preview</h2>
-              <p>Final document styling</p>
-              <div className="mini-paper" style={{ "--accent": downloadAccent } as React.CSSProperties}>
-                <span />
-                <b />
-                <i />
-                <em />
-              </div>
-              <div className="format-pills">
-                <span>A4 Format</span>
-                <span>{downloadTemplate}</span>
-              </div>
-            </section>
-            <section className="download-settings">
-              <button
-                className="close-button"
-                onClick={() => setDownloadOpen(false)}
-                aria-label="Close"
-              >
-                ×
-              </button>
-              <h2>Download Settings</h2>
-              <p>Tailor your document for its destination.</p>
-              <label className="field-label">Select template</label>
-              <div className="template-grid">
-                {TEMPLATES.map((template) => (
-                  <button
-                    key={template}
-                    type="button"
-                    className={template === downloadTemplate ? "active" : ""}
-                    onClick={() => setDownloadTemplate(template)}
-                  >
-                    <Icon name={template === "Modern" ? "grid" : "file"} />
-                    <b>{template}</b>
-                    <span>{template === "ATS-Safe" ? "Optimized parsing" : "Professional layout"}</span>
-                  </button>
-                ))}
-              </div>
-              <div className="settings-grid">
-                <label>
-                  Typography
-                  <select
-                    value={downloadFont}
-                    onChange={(e) => setDownloadFont(e.target.value)}
-                  >
-                    {FONT_OPTIONS.map((font) => (
-                      <option key={font}>{font}</option>
-                    ))}
-                  </select>
-                </label>
-                <div>
-                  <label className="field-label">Color accent</label>
-                  <div className="color-dots">
-                    {ACCENT_COLORS.map((color) => (
-                      <button
-                        key={color}
-                        type="button"
-                        className={color === downloadAccent ? "active" : ""}
-                        style={{ backgroundColor: color }}
-                        aria-label={`Accent ${color}`}
-                        onClick={() => setDownloadAccent(color)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className="toggle-card bordered">
-                <Icon name="brain" />
-                <div>
-                  <b>Include AI Summary Header</b>
-                  <p>Adds a generated profile summary based on your experience.</p>
-                </div>
-                <button
-                  type="button"
-                  className={`switch ${includeAiSummary ? "on" : ""}`}
-                  onClick={() => setIncludeAiSummary((v) => !v)}
-                  aria-pressed={includeAiSummary}
-                >
-                  <span />
-                </button>
-              </div>
-              <div className="modal-actions">
-                <button
-                  className="primary-button"
-                  onClick={handleDownload}
-                  disabled={downloading}
-                >
-                  <Icon name="download" /> {downloading ? "Preparing…" : "Download PDF"}
-                </button>
-                <button onClick={() => setDownloadOpen(false)}>Cancel</button>
-              </div>
-            </section>
-          </div>
-        </div>
       )}
 
       <ToastStack toasts={toasts} onDismiss={dismiss} />

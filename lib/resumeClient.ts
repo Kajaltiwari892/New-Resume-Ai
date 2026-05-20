@@ -37,6 +37,7 @@ export type Resume = {
   name: string;
   source: "file" | "paste";
   mimeType?: string;
+  hasFile?: boolean;
   sections: ResumeSections;
   rawText?: string;
   active: boolean;
@@ -213,6 +214,27 @@ export async function uploadResume(file: File, name?: string) {
   }
 
   return (await res.json()) as { resume: Resume };
+}
+
+export async function fetchResumeFileBlob(id: string): Promise<Blob | null> {
+  const token = getAccessToken();
+  const res = await fetch(`${API_BASE}/api/resumes/${id}/file`, {
+    method: "GET",
+    credentials: "include",
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+
+  if (res.status === 401) {
+    const { refresh } = await import("./authClient");
+    const newToken = await refresh();
+    if (newToken) return fetchResumeFileBlob(id);
+  }
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    const { ApiError } = await import("./api");
+    throw new ApiError(res.status, "FILE_FAILED", res.statusText);
+  }
+  return res.blob();
 }
 
 export function patchResume(

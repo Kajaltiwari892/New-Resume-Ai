@@ -162,7 +162,6 @@ export default function LandingPage() {
             <h4>Account</h4>
             <Link href="/auth">Sign Up</Link>
             <Link href="/auth">Log In</Link>
-            <Link href="#">Forgot Password</Link>
           </div>
         </div>
 

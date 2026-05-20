@@ -76,8 +76,21 @@ export async function uploadResume(req, res) {
     mimeType: req.file.mimetype,
     rawText: text,
     sections,
+    fileData: req.file.buffer,
+    hasFile: true,
   });
   res.status(201).json({ resume });
+}
+
+export async function getResumeFile(req, res) {
+  const r = await Resume.findById(req.params.id).select("+fileData");
+  assertOwner(r, req.user._id);
+  if (!r.hasFile || !r.fileData) {
+    throw NotFound("NO_FILE", "Original file not available for this resume.");
+  }
+  res.setHeader("Content-Type", r.mimeType || "application/octet-stream");
+  res.setHeader("Content-Disposition", `inline; filename="${(r.name || "resume").replace(/[^a-z0-9._-]/gi, "_")}"`);
+  res.send(r.fileData);
 }
 
 export async function getResume(req, res) {
