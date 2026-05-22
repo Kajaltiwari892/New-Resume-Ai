@@ -414,7 +414,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
     if (!resume || interviewLoading) return;
     setInterviewLoading(true);
     try {
-      const { questions } = await generateInterviewQuestionsApi(resume.id, 2);
+      const { questions } = await generateInterviewQuestionsApi(resume.id, { count: 2 });
       setInterviewQuestions(questions);
       const firstGroup = questions[0]?.group;
       if (firstGroup) setAccordion(firstGroup);

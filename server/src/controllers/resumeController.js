@@ -311,19 +311,33 @@ export async function applyErrorHandler(req, res) {
 export async function generateInterviewHandler(req, res) {
   const resume = await loadResume(req);
   const profile = await Profile.findOne({ userId: req.user._id });
-  const count = Math.max(1, Math.min(Number(req.body.count) || 2, 4));
+
+  const ALLOWED_DIFFICULTIES = ["Easy", "Medium", "Hard", "Mixed"];
+  const ALLOWED_GROUPS = ["Behavioral", "Technical", "Role-Specific", "Culture Fit", "Resume-Based"];
+
+  const count = Math.max(1, Math.min(Number(req.body.count) || 5, 15));
+  const difficulty = ALLOWED_DIFFICULTIES.includes(req.body.difficulty)
+    ? req.body.difficulty
+    : null;
+  const group = ALLOWED_GROUPS.includes(req.body.group) ? req.body.group : null;
+  const withAnswers = req.body.withAnswers !== false;
+
   const text = resume.rawText || buildRawText(resume.sections);
   const raw = await generateInterviewQuestions(text, {
     targetRole: profile?.targetRole,
     count,
+    difficulty,
+    group,
+    withAnswers,
   });
-  // Keep history but only return the newly generated set.
+
   const docs = await InterviewQuestion.insertMany(
     raw.map((q) => ({
       resumeId: resume._id,
       userId: req.user._id,
       group: q.group,
       text: q.text,
+      answer: q.answer || "",
       difficulty: q.difficulty || "Medium",
     })),
   );
@@ -334,7 +348,7 @@ export async function listInterviewQuestions(req, res) {
   const resume = await loadResume(req);
   const questions = await InterviewQuestion.find({ resumeId: resume._id })
     .sort({ createdAt: -1 })
-    .limit(20);
+    .limit(200);
   res.json({ questions });
 }
 

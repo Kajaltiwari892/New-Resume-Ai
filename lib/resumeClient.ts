@@ -135,7 +135,11 @@ export type InterviewQuestion = {
   difficulty: "Easy" | "Medium" | "Hard";
   ready: boolean;
   createdAt: string;
+  /** Suggested model answer. Backend should return this; UI handles missing gracefully. */
+  answer?: string;
 };
+
+export type InterviewDifficulty = "Easy" | "Medium" | "Hard" | "Mixed";
 
 export type KeywordMatch = {
   id: string;
@@ -321,11 +325,26 @@ export function applyErrorFix(resumeId: string, errorId: string) {
 
 // --- Interview ---------------------------------------------------------
 
-export function generateInterviewQuestions(id: string, count = 5) {
+export function generateInterviewQuestions(
+  id: string,
+  opts: {
+    count?: number;
+    difficulty?: InterviewDifficulty;
+    group?: InterviewQuestion["group"];
+    withAnswers?: boolean;
+  } = {},
+) {
+  const { count = 5, difficulty, group, withAnswers = true } = opts;
   return api<{ questions: InterviewQuestion[] }>(`/api/resumes/${id}/interview`, {
     method: "POST",
     auth: true,
-    json: { count },
+    json: { count, difficulty, group, withAnswers },
+  });
+}
+
+export function listInterviewQuestions(id: string) {
+  return api<{ questions: InterviewQuestion[] }>(`/api/resumes/${id}/interview`, {
+    auth: true,
   });
 }
 
