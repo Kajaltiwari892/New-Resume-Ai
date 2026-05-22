@@ -4,25 +4,36 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  FiArrowLeft,
+  FiChevronLeft,
+  FiChevronRight,
+  FiChevronUp,
   FiClock,
   FiFileText,
   FiGrid,
-  FiHelpCircle,
   FiLogOut,
   FiMenu,
   FiMessageSquare,
   FiPlus,
-  FiSearch,
   FiSettings,
   FiX,
   FiZap,
 } from "react-icons/fi";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { fetchResumeFileBlob } from "@/lib/resumeClient";
 import { FileSearch } from "lucide-react";
 import { Icon, type IconName } from "./Icon";
 import {
@@ -34,24 +45,17 @@ import { ApiError } from "@/lib/api";
 import { logout, type PublicUser } from "@/lib/authClient";
 import {
   analyzeResume,
-  applyAllSuggestions as applyAllSuggestionsApi,
-  applyErrorFix as applyErrorFixApi,
-  applySuggestion as applySuggestionApi,
   createResumeFromText,
-  downloadResumePdf,
   findErrors as findErrorsApi,
   generateInterviewQuestions as generateInterviewQuestionsApi,
   generateSuggestions as generateSuggestionsApi,
   getAnalysis,
   getOnboarding,
   listResumes,
-  matchKeywords as matchKeywordsApi,
   rewriteError as rewriteErrorApi,
   uploadResume,
   type Analysis,
-  type ExportOptions,
   type InterviewQuestion,
-  type KeywordMatch,
   type Profile,
   type Resume,
   type ResumeErrorRecord,
@@ -60,7 +64,7 @@ import {
 
 type Mode = "upload" | "analyzing" | "dashboard";
 type UploadTab = "file" | "paste";
-type TabKey = "Score" | "Errors" | "Suggestions" | "Interview" | "Keywords";
+type TabKey = "Score" | "Errors" | "Suggestions" | "Interview";
 
 const BAR_ICON_BY_KEY: Record<string, IconName> = {
   ats: "target",
@@ -85,10 +89,6 @@ const GRADE_CONFIG: Record<string, { color: string; label: string }> = {
 };
 
 
-const TEMPLATES: ExportOptions["template"][] = ["Modern", "Classic", "Minimal", "ATS-Safe"];
-const ACCENT_COLORS = ["#7C3AED", "#06B6D4", "#F43F5E", "#10B981", "#C4B5FD"];
-const FONT_OPTIONS = ["Inter", "IBM Plex Sans", "System UI"];
-
 function severityClass(severity: string) {
   return severity.toLowerCase().replace(/\s+/g, "-");
 }
@@ -101,68 +101,83 @@ function errorMessage(err: unknown, fallback: string) {
   return fallback;
 }
 
-function ResumeViewer({ resume, user, targetRole, jobTitle }: {
-  resume: Resume;
-  user: PublicUser;
-  targetRole: string;
-  jobTitle: string;
-}) {
-  const sections = resume.sections;
-  const skills = (sections.skills || "")
-    .split(/[,\n]/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-  const experienceLines = (sections.experience || "")
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean);
+function ResumeFileViewer({ resume }: { resume: Resume }) {
+  const [fileUrl, setFileUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(() => Boolean(resume.hasFile));
+  const [unavailable, setUnavailable] = useState<boolean>(() => !resume.hasFile);
+
+  useEffect(() => {
+    if (!resume.hasFile) return;
+    let cancelled = false;
+    let url: string | null = null;
+    (async () => {
+      try {
+        const blob = await fetchResumeFileBlob(resume.id);
+        if (cancelled) return;
+        if (!blob) {
+          setUnavailable(true);
+          setLoading(false);
+          return;
+        }
+        url = URL.createObjectURL(blob);
+        setFileUrl(url);
+        setLoading(false);
+      } catch {
+        if (!cancelled) {
+          setUnavailable(true);
+          setLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [resume.id, resume.hasFile]);
+
+  const isPdf = (resume.mimeType || "").includes("pdf");
+
+  if (loading) {
+    return (
+      <article className="resume-viewer resume-file-viewer">
+        <p className="muted" style={{ padding: 24 }}>Loading your resume…</p>
+      </article>
+    );
+  }
+
+  if (unavailable || !fileUrl) {
+    return (
+      <article className="resume-viewer resume-file-viewer">
+        <div style={{ padding: 24, textAlign: "center" }}>
+          <p className="muted">Original resume preview isn&apos;t available for this entry.</p>
+          <p className="muted" style={{ marginTop: 8, fontSize: 13 }}>
+            Re-upload your PDF to see it here, or open the Suggestions tab to review insights.
+          </p>
+        </div>
+      </article>
+    );
+  }
+
+  if (isPdf) {
+    return (
+      <article className="resume-viewer resume-file-viewer">
+        <iframe
+          src={fileUrl}
+          title={resume.name || "Resume"}
+          style={{ width: "100%", height: "100%", border: 0, background: "#fff" }}
+        />
+      </article>
+    );
+  }
 
   return (
-    <article className="resume-viewer">
-      <header className="rv-header">
-        <div className="rv-avatar">{(user.name || "?")[0].toUpperCase()}</div>
-        <div>
-          <h2>{user.name || "Your Name"}</h2>
-          <p>{targetRole || jobTitle || "Your Target Role"}</p>
-          <span>{user.email}</span>
-        </div>
-      </header>
-
-      {sections.summary && (
-        <div className="rv-section">
-          <div className="rv-section-label">Summary</div>
-          <p className="rv-summary-text">{sections.summary}</p>
-        </div>
-      )}
-
-      {experienceLines.length > 0 && (
-        <div className="rv-section">
-          <div className="rv-section-label">Experience</div>
-          <ul className="rv-exp-list">
-            {experienceLines.map((line, i) => (
-              <li key={i}>{line}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {skills.length > 0 && (
-        <div className="rv-section">
-          <div className="rv-section-label">Skills</div>
-          <div className="rv-skill-chips">
-            {skills.map((skill, i) => (
-              <span key={i} className="rv-skill-chip">{skill}</span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {sections.education && (
-        <div className="rv-section">
-          <div className="rv-section-label">Education</div>
-          <p className="rv-education-text">{sections.education}</p>
-        </div>
-      )}
+    <article className="resume-viewer resume-file-viewer">
+      <div style={{ padding: 24, textAlign: "center" }}>
+        <p className="muted">Preview isn&apos;t supported for this file type.</p>
+        <a href={fileUrl} download={resume.name} className="primary-button" style={{ marginTop: 12, display: "inline-block" }}>
+          Open original file
+        </a>
+      </div>
     </article>
   );
 }
@@ -179,44 +194,40 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
 
   // ---- profile snapshot (read-only here; editing lives in /onboarding) -
   const [fullName, setFullName] = useState("");
-  const [jobTitle, setJobTitle] = useState("");
   const [targetRole, setTargetRole] = useState("");
   const [dreamCompanies, setDreamCompanies] = useState<string[]>([]);
   const [uploadTab, setUploadTab] = useState<UploadTab>("file");
   const [file, setFile] = useState<File | null>(null);
   const [pastedText, setPastedText] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [rejection, setRejection] = useState<null | {
+    code: string;
+    message: string;
+    score: number;
+    wordCount: number;
+    found: string[];
+    missing: string[];
+    hint: string;
+  }>(null);
 
   // ---- core data -------------------------------------------------------
   const [resume, setResume] = useState<Resume | null>(null);
+  const [previousResume, setPreviousResume] = useState<Resume | null>(null);
+  const [previousAnalysis, setPreviousAnalysis] = useState<Analysis | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [suggestionsLoaded, setSuggestionsLoaded] = useState(false);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [resumeErrors, setResumeErrors] = useState<ResumeErrorRecord[]>([]);
   const [errorsLoaded, setErrorsLoaded] = useState(false);
   const [errorsLoading, setErrorsLoading] = useState(false);
   const [rewritingErrorId, setRewritingErrorId] = useState<string | null>(null);
-  const [applyingErrorId, setApplyingErrorId] = useState<string | null>(null);
   const [interviewQuestions, setInterviewQuestions] = useState<InterviewQuestion[]>([]);
-  const [interviewLoaded, setInterviewLoaded] = useState(false);
   const [interviewLoading, setInterviewLoading] = useState(false);
-  const [keywordMatch, setKeywordMatch] = useState<KeywordMatch | null>(null);
-  const [keywordLoading, setKeywordLoading] = useState(false);
-  const [jobDescription, setJobDescription] = useState("");
-
-  // ---- editor state ----------------------------------------------------
+  // ---- panel UI state --------------------------------------------------
   const [activeTab, setActiveTab] = useState<TabKey>("Score");
   const [accordion, setAccordion] = useState<string>("Behavioral");
-
-  // ---- download modal --------------------------------------------------
-  const [downloadOpen, setDownloadOpen] = useState(false);
-  const [downloadTemplate, setDownloadTemplate] =
-    useState<ExportOptions["template"]>("Modern");
-  const [downloadFont, setDownloadFont] = useState<string>("Inter");
-  const [downloadAccent, setDownloadAccent] = useState<string>(ACCENT_COLORS[0]);
-  const [includeAiSummary, setIncludeAiSummary] = useState(true);
-  const [downloading, setDownloading] = useState(false);
+  const [analysisSheetOpen, setAnalysisSheetOpen] = useState<boolean>(false);
+  const [analysisCollapsed, setAnalysisCollapsed] = useState<boolean>(false);
 
   // Live-rotating analyzing message.
   useEffect(() => {
@@ -275,7 +286,6 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
         const profile = onboardingRes.profile;
         if (profile) {
           setFullName(profile.fullName || user.name || "");
-          setJobTitle(profile.jobTitle || "");
           setTargetRole(profile.targetRole || "");
           setDreamCompanies(profile.dreamCompanies || []);
         } else {
@@ -318,6 +328,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
       return;
     }
     setSubmitting(true);
+    setRejection(null);
     try {
       let newResume: Resume;
       if (uploadTab === "file" && file) {
@@ -345,12 +356,35 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
         });
       }
     } catch (err) {
-      push({
-        kind: "error",
-        title: "Couldn't start analysis",
-        message: errorMessage(err, "Something went wrong — please try again."),
-      });
-      setMode("upload");
+      // Validator rejection — render the rich rejection panel inline.
+      if (
+        err instanceof ApiError &&
+        (err.code === "NOT_A_RESUME" || err.code === "PARSE_FAILED")
+      ) {
+        const d = (err.details as
+          | { score?: number; wordCount?: number; found?: string[]; missing?: string[]; hint?: string }
+          | undefined) || {};
+        setRejection({
+          code: err.code,
+          message: err.message,
+          score: typeof d.score === "number" ? d.score : 0,
+          wordCount: typeof d.wordCount === "number" ? d.wordCount : 0,
+          found: Array.isArray(d.found) ? d.found : [],
+          missing: Array.isArray(d.missing) ? d.missing : [err.message],
+          hint:
+            typeof d.hint === "string" && d.hint
+              ? d.hint
+              : "Upload a resume in PDF or DOCX format, or paste the resume text.",
+        });
+        setMode("upload");
+      } else {
+        push({
+          kind: "error",
+          title: "Couldn't start analysis",
+          message: errorMessage(err, "Something went wrong — please try again."),
+        });
+        setMode("upload");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -359,25 +393,23 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
   function resetDerivedData() {
     setAnalysis(null);
     setSuggestions([]);
-    setSuggestionsLoaded(false);
     setSuggestionsLoading(false);
     setResumeErrors([]);
     setErrorsLoaded(false);
     setErrorsLoading(false);
     setRewritingErrorId(null);
-    setApplyingErrorId(null);
     setInterviewQuestions([]);
-    setInterviewLoaded(false);
     setInterviewLoading(false);
-    setKeywordMatch(null);
-    setKeywordLoading(false);
-    setJobDescription("");
   }
 
   function handleStartNewResume() {
     setFile(null);
     setPastedText("");
     setUploadTab("file");
+    if (resume) {
+      setPreviousResume(resume);
+      setPreviousAnalysis(analysis);
+    }
     setResume(null);
     resetDerivedData();
     setActiveTab("Score");
@@ -385,7 +417,14 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
     setMode("upload");
   }
 
-  // ---- resume editing removed (read-only viewer) -----------------------
+  function handleBackToDashboard() {
+    if (!previousResume) return;
+    setResume(previousResume);
+    setAnalysis(previousAnalysis);
+    setFile(null);
+    setPastedText("");
+    setMode("dashboard");
+  }
 
   // ---- analysis / suggestions / interview / keywords -------------------
 
@@ -402,7 +441,6 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
     try {
       const { suggestions: next } = await generateSuggestionsApi(resume.id);
       setSuggestions(next);
-      setSuggestionsLoaded(true);
     } catch (err) {
       push({
         kind: "error",
@@ -418,9 +456,8 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
     if (!resume || interviewLoading) return;
     setInterviewLoading(true);
     try {
-      const { questions } = await generateInterviewQuestionsApi(resume.id, 2);
+      const { questions } = await generateInterviewQuestionsApi(resume.id, { count: 2 });
       setInterviewQuestions(questions);
-      setInterviewLoaded(true);
       const firstGroup = questions[0]?.group;
       if (firstGroup) setAccordion(firstGroup);
     } catch (err) {
@@ -469,158 +506,6 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
     }
   }
 
-  async function handleApplyError(errorId: string) {
-    if (!resume || applyingErrorId) return;
-    setApplyingErrorId(errorId);
-    try {
-      const { resume: nextResume, error: nextError } = await applyErrorFixApi(
-        resume.id,
-        errorId,
-      );
-      setResume(nextResume);
-      setResumeErrors((list) => list.map((e) => (e.id === errorId ? nextError : e)));
-      push({ kind: "success", title: "Fix applied" });
-    } catch (err) {
-      push({
-        kind: "error",
-        title: "Couldn't apply fix",
-        message: errorMessage(err, "Please try again."),
-      });
-    } finally {
-      setApplyingErrorId(null);
-    }
-  }
-
-  // Auto-load tabs the first time they're opened.
-  useEffect(() => {
-    if (mode !== "dashboard" || !resume) return;
-    if (activeTab === "Errors" && !errorsLoaded && !errorsLoading) {
-      void Promise.resolve().then(loadErrors);
-    }
-    if (activeTab === "Suggestions" && !suggestionsLoaded && !suggestionsLoading) {
-      void Promise.resolve().then(loadSuggestions);
-    }
-    if (activeTab === "Interview" && !interviewLoaded && !interviewLoading) {
-      void Promise.resolve().then(loadInterview);
-    }
-  }, [
-    activeTab,
-    mode,
-    resume,
-    errorsLoaded,
-    errorsLoading,
-    suggestionsLoaded,
-    suggestionsLoading,
-    interviewLoaded,
-    interviewLoading,
-    loadErrors,
-    loadSuggestions,
-    loadInterview,
-  ]);
-
-  async function handleApply(suggestionId: string) {
-    if (!resume) return;
-    try {
-      const { resume: nextResume, suggestion: nextSuggestion } = await applySuggestionApi(
-        resume.id,
-        suggestionId,
-      );
-      setResume(nextResume);
-      setSuggestions((list) =>
-        list.map((s) => (s.id === suggestionId ? nextSuggestion : s)),
-      );
-      push({ kind: "success", title: "Suggestion applied" });
-    } catch (err) {
-      push({
-        kind: "error",
-        title: "Couldn't apply",
-        message: errorMessage(err, "Please try again."),
-      });
-    }
-  }
-
-  async function handleApplyAll() {
-    if (!resume) return;
-    try {
-      const { resume: nextResume, applied } = await applyAllSuggestionsApi(resume.id);
-      setResume(nextResume);
-      setSuggestions((list) => list.map((s) => ({ ...s, applied: true })));
-      push({
-        kind: "success",
-        title: "All suggestions applied",
-        message: `${applied} improvement${applied === 1 ? "" : "s"} applied.`,
-      });
-    } catch (err) {
-      push({
-        kind: "error",
-        title: "Apply-all failed",
-        message: errorMessage(err, "Please try again."),
-      });
-    }
-  }
-
-  // Debounced keyword match.
-  const keywordRequestId = useRef(0);
-  useEffect(() => {
-    if (!resume) return;
-    const text = jobDescription.trim();
-    if (text.length < 30) {
-      const clearTimer = window.setTimeout(() => setKeywordMatch(null), 0);
-      return () => window.clearTimeout(clearTimer);
-    }
-    const myId = ++keywordRequestId.current;
-    const timer = window.setTimeout(async () => {
-      setKeywordLoading(true);
-      try {
-        const { match } = await matchKeywordsApi(resume.id, text);
-        if (myId === keywordRequestId.current) setKeywordMatch(match);
-      } catch (err) {
-        if (myId === keywordRequestId.current) {
-          push({
-            kind: "error",
-            title: "Keyword match failed",
-            message: errorMessage(err, "Try a longer description."),
-          });
-        }
-      } finally {
-        if (myId === keywordRequestId.current) setKeywordLoading(false);
-      }
-    }, 700);
-    return () => window.clearTimeout(timer);
-  }, [jobDescription, resume, push]);
-
-  // ---- download --------------------------------------------------------
-
-  async function handleDownload() {
-    if (!resume || downloading) return;
-    setDownloading(true);
-    try {
-      const { blob, filename } = await downloadResumePdf(resume.id, {
-        template: downloadTemplate,
-        font: downloadFont,
-        accent: downloadAccent,
-        includeAiSummary,
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      setDownloadOpen(false);
-      push({ kind: "success", title: "PDF ready", message: `Saved as ${filename}` });
-    } catch (err) {
-      push({
-        kind: "error",
-        title: "Download failed",
-        message: errorMessage(err, "Please try again."),
-      });
-    } finally {
-      setDownloading(false);
-    }
-  }
 
   async function handleLogout() {
     try {
@@ -681,6 +566,17 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
 
       {mode === "upload" && (
         <section className="ob-stage" aria-label="Upload your resume">
+          {previousResume && (
+            <button
+              type="button"
+              className="analyzing-back-btn"
+              onClick={handleBackToDashboard}
+              aria-label="Back to dashboard"
+            >
+              <FiArrowLeft size={16} />
+              <span>Back to Dashboard</span>
+            </button>
+          )}
           <div className="ob-card glass-panel">
             {/* Brand */}
             <div className="ob-brand">
@@ -698,7 +594,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
               <button
                 type="button"
                 className={uploadTab === "file" ? "active" : ""}
-                onClick={() => setUploadTab("file")}
+                onClick={() => { setUploadTab("file"); setRejection(null); }}
                 id="ob-tab-file"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>
@@ -707,7 +603,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
               <button
                 type="button"
                 className={uploadTab === "paste" ? "active" : ""}
-                onClick={() => setUploadTab("paste")}
+                onClick={() => { setUploadTab("paste"); setRejection(null); }}
                 id="ob-tab-paste"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
@@ -722,7 +618,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
                   id="ob-file-input"
                   type="file"
                   accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFile(e.target.files?.[0] || null)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setFile(e.target.files?.[0] || null); setRejection(null); }}
                 />
                 <div className="ob-dropzone-inner">
                   {file ? (
@@ -749,7 +645,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
               <textarea
                 className="ob-paste-area"
                 value={pastedText}
-                onChange={(e) => setPastedText(e.target.value)}
+                onChange={(e) => { setPastedText(e.target.value); if (rejection) setRejection(null); }}
                 placeholder="Paste your full resume text here…"
                 rows={10}
                 aria-label="Resume text"
@@ -761,6 +657,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
               Files are parsed securely and attached only to your ResumeIQ account.
             </p>
+
 
             {/* CTA */}
             <button
@@ -792,6 +689,23 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
 
       {mode === "analyzing" && (
         <section className="analysis-overlay">
+          <button
+            type="button"
+            className="analyzing-back-btn"
+            onClick={() => {
+              if (previousResume) {
+                handleBackToDashboard();
+              } else if (resume) {
+                setMode("dashboard");
+              } else {
+                setMode("upload");
+              }
+            }}
+            aria-label="Back to dashboard"
+          >
+            <FiArrowLeft size={16} />
+            <span>Back</span>
+          </button>
           <div className="particle-field">
             {Array.from({ length: 18 }).map((_, index) => (
               <span key={index} style={{ "--i": index } as React.CSSProperties} />
@@ -811,7 +725,9 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
       )}
 
       {mode === "dashboard" && resume && (
-        <section className={`dashboard ${mobileNavOpen ? "nav-open" : ""}`}>
+        <section
+          className={`dashboard ${mobileNavOpen ? "nav-open" : ""} ${analysisSheetOpen ? "analysis-open" : ""} ${analysisCollapsed ? "panel-collapsed" : ""}`}
+        >
           {mobileNavOpen && (
             <div
               className="mobile-nav-backdrop"
@@ -899,60 +815,60 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
                 <FiMenu size={18} />
               </button>
               <div>
-                <small>Resume Preview</small>
                 <h1>{resumeFileName}</h1>
               </div>
               <div className="topbar-actions">
                 <button onClick={handleReanalyze} title="Re-run analysis">
                   <FiZap size={14} /> Re-analyze
                 </button>
-                <button aria-label="Search" title="Search">
-                  <FiSearch size={15} />
-                </button>
-                <button aria-label="Help" title="Help">
-                  <FiHelpCircle size={15} />
-                </button>
               </div>
             </div>
 
-            <ResumeViewer
-              resume={resume}
-              user={user}
-              targetRole={targetRole}
-              jobTitle={jobTitle}
-            />
-
-            <div className="viewer-download-bar">
-              <button className="download-paper" onClick={() => setDownloadOpen(true)}>
-                <Icon name="download" /> Download as PDF
-              </button>
-            </div>
+            <ResumeFileViewer key={resume.id} resume={resume} />
           </section>
 
           <aside className="analysis-panel">
-            <div className="tabs">
-              {(["Score", "Errors", "Suggestions", "Interview", "Keywords"] as TabKey[]).map((tab) => (
-                <button
-                  key={tab}
-                  className={activeTab === tab ? "active" : ""}
-                  onClick={() => setActiveTab(tab)}
-                >
-                  {tab}
-                </button>
-              ))}
+            <button
+              type="button"
+              className="analysis-collapse-toggle"
+              onClick={() => setAnalysisCollapsed((c) => !c)}
+              aria-label={analysisCollapsed ? "Expand insights panel" : "Collapse insights panel"}
+              aria-expanded={!analysisCollapsed}
+              title={analysisCollapsed ? "Expand insights" : "Collapse insights"}
+            >
+              {analysisCollapsed ? <FiChevronLeft size={18} /> : <FiChevronRight size={18} />}
+            </button>
+            <div className="analysis-panel-scroll">
+            <div className="analysis-sheet-head">
+              <div className="tabs">
+                {(["Score", "Errors", "Suggestions", "Interview"] as TabKey[]).map((tab) => (
+                  <button
+                    key={tab}
+                    className={activeTab === tab ? "active" : ""}
+                    onClick={() => {
+                      setActiveTab(tab);
+                      setAnalysisSheetOpen(true);
+                    }}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="analysis-sheet-toggle"
+                onClick={() => setAnalysisSheetOpen((open) => !open)}
+                aria-label={analysisSheetOpen ? "Close insights" : "Open insights"}
+                aria-expanded={analysisSheetOpen}
+              >
+                <FiChevronUp size={18} />
+              </button>
             </div>
 
             {activeTab === "Score" && (
               <div className="tab-panel">
                 {analysis ? (
                   <>
-                    <div
-                      className="score-dial"
-                      style={{ "--score": analysis.overallScore } as React.CSSProperties}
-                    >
-                      <strong>{analysis.overallScore}</strong>
-                      <span>/100</span>
-                    </div>
                     {/* Score dial + grade */}
                     <div className="score-header">
                       <div
@@ -1061,14 +977,6 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
                         {issue.fix_instruction && (
                           <p className="issue-instruction">💡 {issue.fix_instruction}</p>
                         )}
-                        <button
-                          onClick={() => {
-                            setActiveTab("Suggestions");
-                            if (!suggestionsLoaded) loadSuggestions();
-                          }}
-                        >
-                          Get AI Fix
-                        </button>
                       </div>
                     ))}
 
@@ -1128,7 +1036,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
                   <div>
                     <h2>Line-level errors</h2>
                     <p className="errors-sub">
-                      Each item is a concrete fix. Click <em>Get AI fix</em>, review, then <em>Apply</em>.
+                      Each item highlights a phrase to rewrite — use these as inspiration when updating your resume.
                     </p>
                   </div>
                   <button
@@ -1152,10 +1060,9 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
                 )}
                 {resumeErrors.map((error, index) => {
                   const isRewriting = rewritingErrorId === error.id;
-                  const isApplying = applyingErrorId === error.id;
                   return (
                     <div
-                      className={`issue-card error-card ${severityClass(error.severity)} ${error.applied ? "applied" : ""}`}
+                      className={`issue-card error-card ${severityClass(error.severity)}`}
                       style={{ "--delay": `${index * 60}ms` } as React.CSSProperties}
                       key={error.id}
                     >
@@ -1168,44 +1075,23 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
                       <p className="error-reason">{error.reason}</p>
 
                       {error.fix && (
-                        <p className="error-fix">{error.fix}</p>
+                        <div className="error-fix-block">
+                          <span className="error-fix-label">Suggested rewrite</span>
+                          <p className="error-fix">{error.fix}</p>
+                        </div>
                       )}
 
-                      <div className="error-actions">
-                        {!error.applied && !error.fix && (
+                      {!error.fix && (
+                        <div className="error-actions">
                           <button
                             type="button"
                             onClick={() => handleRewriteError(error.id)}
                             disabled={isRewriting}
                           >
-                            {isRewriting ? "Generating…" : "Get AI fix"}
+                            {isRewriting ? "Generating…" : "Suggest rewrite"}
                           </button>
-                        )}
-                        {!error.applied && error.fix && (
-                          <>
-                            <button
-                              type="button"
-                              className="primary-button"
-                              onClick={() => handleApplyError(error.id)}
-                              disabled={isApplying}
-                            >
-                              {isApplying ? "Applying…" : "Apply"}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleRewriteError(error.id)}
-                              disabled={isRewriting}
-                            >
-                              {isRewriting ? "…" : "Regenerate"}
-                            </button>
-                          </>
-                        )}
-                        {error.applied && (
-                          <span className="error-applied-badge">
-                            <Icon name="check" /> Applied
-                          </span>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1231,28 +1117,16 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
                   <>
                     <div className="suggestions-header">
                       <span className="suggestions-count">{suggestions.length} improvements found</span>
-                      <button
-                        className="apply-all"
-                        onClick={handleApplyAll}
-                        disabled={suggestions.every((s) => s.applied)}
-                      >
-                        Apply All
-                      </button>
                     </div>
                     {suggestions.map((suggestion, index) => (
                       <div
-                        className={`suggestion-card ${suggestion.applied ? "applied" : ""}`}
+                        className="suggestion-card"
                         style={{ "--delay": `${index * 60}ms` } as React.CSSProperties}
                         key={suggestion.id}
                       >
                         {/* Section badge */}
                         <div className="suggestion-card-head">
                           <span className="suggestion-section-badge">{suggestion.section}</span>
-                          {suggestion.applied && (
-                            <span className="suggestion-applied-badge">
-                              <Icon name="check" /> Applied
-                            </span>
-                          )}
                         </div>
 
                         {/* Why it was flagged */}
@@ -1271,14 +1145,6 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
                           <span>Improved</span>
                           <p>{suggestion.next}</p>
                         </div>
-
-                        <button
-                          className={suggestion.applied ? "" : "primary-button"}
-                          onClick={() => handleApply(suggestion.id)}
-                          disabled={suggestion.applied}
-                        >
-                          {suggestion.applied ? "✓ Applied" : "Apply Fix"}
-                        </button>
                       </div>
                     ))}
                   </>
@@ -1341,164 +1207,75 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
               </div>
             )}
 
-            {activeTab === "Keywords" && (
-              <div className="tab-panel">
-                <textarea
-                  className="job-input"
-                  value={jobDescription}
-                  onChange={(e) => setJobDescription(e.target.value)}
-                  placeholder="Paste Job Description to enable keyword matching..."
-                  rows={6}
-                />
-                {keywordLoading && (
-                  <p className="empty-panel">
-                    <span>Matching keywords…</span>
-                  </p>
-                )}
-                {keywordMatch && (
-                  <>
-                    <div className="word-cloud">
-                      {[...keywordMatch.found, ...keywordMatch.missing].map((word, idx) => (
-                        <span
-                          className={idx < keywordMatch.found.length ? "found" : "missing"}
-                          key={`${idx}-${word}`}
-                        >
-                          {word}
-                        </span>
-                      ))}
-                    </div>
-                    <div className="keyword-columns">
-                      <div>
-                        <h3>Found in Resume</h3>
-                        {keywordMatch.found.length === 0 && <p className="empty-line">None found yet.</p>}
-                        {keywordMatch.found.map((word, idx) => (
-                          <span key={`${idx}-${word}`}>
-                            <Icon name="check" /> {word}
-                          </span>
-                        ))}
-                      </div>
-                      <div>
-                        <h3>Missing</h3>
-                        {keywordMatch.missing.length === 0 && (
-                          <p className="empty-line">Great — nothing obvious is missing.</p>
-                        )}
-                        {keywordMatch.missing.map((word, idx) => (
-                          <span key={`${idx}-${word}`}>× {word}</span>
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                )}
-                {!keywordLoading && !keywordMatch && jobDescription.trim().length < 30 && (
-                  <p className="empty-line">Paste at least 30 characters to match keywords.</p>
-                )}
-              </div>
-            )}
+            </div>
           </aside>
         </section>
       )}
 
-      {downloadOpen && resume && (
-        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Download resume">
-          <div className="download-modal">
-            <section className="export-preview">
-              <h2>Export Preview</h2>
-              <p>Final document styling</p>
-              <div className="mini-paper" style={{ "--accent": downloadAccent } as React.CSSProperties}>
-                <span />
-                <b />
-                <i />
-                <em />
-              </div>
-              <div className="format-pills">
-                <span>A4 Format</span>
-                <span>{downloadTemplate}</span>
-              </div>
-            </section>
-            <section className="download-settings">
-              <button
-                className="close-button"
-                onClick={() => setDownloadOpen(false)}
-                aria-label="Close"
-              >
-                ×
-              </button>
-              <h2>Download Settings</h2>
-              <p>Tailor your document for its destination.</p>
-              <label className="field-label">Select template</label>
-              <div className="template-grid">
-                {TEMPLATES.map((template) => (
-                  <button
-                    key={template}
-                    type="button"
-                    className={template === downloadTemplate ? "active" : ""}
-                    onClick={() => setDownloadTemplate(template)}
-                  >
-                    <Icon name={template === "Modern" ? "grid" : "file"} />
-                    <b>{template}</b>
-                    <span>{template === "ATS-Safe" ? "Optimized parsing" : "Professional layout"}</span>
-                  </button>
-                ))}
-              </div>
-              <div className="settings-grid">
-                <label>
-                  Typography
-                  <select
-                    value={downloadFont}
-                    onChange={(e) => setDownloadFont(e.target.value)}
-                  >
-                    {FONT_OPTIONS.map((font) => (
-                      <option key={font}>{font}</option>
-                    ))}
-                  </select>
-                </label>
-                <div>
-                  <label className="field-label">Color accent</label>
-                  <div className="color-dots">
-                    {ACCENT_COLORS.map((color) => (
-                      <button
-                        key={color}
-                        type="button"
-                        className={color === downloadAccent ? "active" : ""}
-                        style={{ backgroundColor: color }}
-                        aria-label={`Accent ${color}`}
-                        onClick={() => setDownloadAccent(color)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className="toggle-card bordered">
-                <Icon name="brain" />
-                <div>
-                  <b>Include AI Summary Header</b>
-                  <p>Adds a generated profile summary based on your experience.</p>
-                </div>
-                <button
-                  type="button"
-                  className={`switch ${includeAiSummary ? "on" : ""}`}
-                  onClick={() => setIncludeAiSummary((v) => !v)}
-                  aria-pressed={includeAiSummary}
-                >
-                  <span />
-                </button>
-              </div>
-              <div className="modal-actions">
-                <button
-                  className="primary-button"
-                  onClick={handleDownload}
-                  disabled={downloading}
-                >
-                  <Icon name="download" /> {downloading ? "Preparing…" : "Download PDF"}
-                </button>
-                <button onClick={() => setDownloadOpen(false)}>Cancel</button>
-              </div>
-            </section>
-          </div>
-        </div>
-      )}
-
       <ToastStack toasts={toasts} onDismiss={dismiss} />
+
+      {/* Resume validator rejection — modal explaining why the file isn't a resume */}
+      <Dialog open={!!rejection} onOpenChange={(o) => { if (!o) setRejection(null); }}>
+        <DialogContent className="max-w-lg border-neutral-800 bg-neutral-950 text-neutral-100">
+          <DialogHeader>
+            <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-rose-500/15 text-2xl">
+              ⚠️
+            </div>
+            <DialogTitle className="text-lg font-semibold text-neutral-100">
+              {rejection?.message || "This doesn't look like a resume"}
+            </DialogTitle>
+            <DialogDescription className="text-sm leading-relaxed text-neutral-400">
+              {rejection?.hint}
+            </DialogDescription>
+          </DialogHeader>
+
+          {rejection && (rejection.missing.length > 0 || rejection.found.length > 0) && (
+            <div className="mt-2 space-y-4">
+              {rejection.missing.length > 0 && (
+                <div>
+                  <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-rose-300">
+                    What we couldn&apos;t find
+                  </h4>
+                  <ul className="space-y-1.5">
+                    {rejection.missing.map((m, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm leading-relaxed text-neutral-300">
+                        <span aria-hidden>❌</span>
+                        <span>{m}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {rejection.found.length > 0 && (
+                <div>
+                  <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-emerald-300">
+                    What we did find
+                  </h4>
+                  <ul className="space-y-1.5">
+                    {rejection.found.map((f, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm leading-relaxed text-neutral-300">
+                        <span aria-hidden>✅</span>
+                        <span>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter className="mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setRejection(null)}
+              className="border-neutral-700 bg-transparent text-sm text-neutral-100 hover:bg-neutral-900 hover:text-white"
+            >
+              Try a different file
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

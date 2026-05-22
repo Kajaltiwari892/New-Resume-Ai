@@ -8,6 +8,7 @@ import { Profile } from "../models/Profile.js";
 import { BadRequest, NotFound } from "../utils/httpError.js";
 import { assertOwner } from "../utils/ownership.js";
 import { parsePdf, parseDocx, parseText, splitIntoSections } from "../services/parse.js";
+import { validateResumeText } from "../services/resumeValidator.js";
 import {
   analyzeResume,
   generateSuggestions,
@@ -46,6 +47,16 @@ export async function createResumeFromText(req, res) {
   const name = String(req.body.name || "Pasted Resume").trim().slice(0, 200);
   const text = parseText(req.body.text);
   if (text.length < 50) throw BadRequest("RESUME_TOO_SHORT", "Please paste a longer resume (at least 50 characters).");
+
+  const validation = validateResumeText(text);
+  if (!validation.ok) {
+    throw BadRequest(
+      "NOT_A_RESUME",
+      "This doesn't look like a resume.",
+      validation,
+    );
+  }
+
   const sections = splitIntoSections(text);
   const resume = await Resume.create({
     userId: req.user._id,
@@ -66,8 +77,24 @@ export async function uploadResume(req, res) {
     text = await parseDocx(req.file.buffer);
   }
   if (!text || text.length < 50) {
-    throw BadRequest("PARSE_FAILED", "Couldn't extract enough text from that file. Try a different format or paste the text.");
+    throw BadRequest(
+      "PARSE_FAILED",
+      "Couldn't extract enough text from that file. If it's a scanned/image-only PDF, export a text-based PDF or paste the resume content directly.",
+    );
   }
+
+  const validation = validateResumeText(text);
+  console.log(
+    `[upload] ${req.file.originalname} — ok=${validation.ok} score=${validation.score} words=${validation.wordCount} found=[${validation.found.join("|")}] missing=[${validation.missing.join("|")}]`,
+  );
+  if (!validation.ok) {
+    throw BadRequest(
+      "NOT_A_RESUME",
+      "This file doesn't look like a resume.",
+      validation,
+    );
+  }
+
   const sections = splitIntoSections(text);
   const resume = await Resume.create({
     userId: req.user._id,
@@ -76,8 +103,21 @@ export async function uploadResume(req, res) {
     mimeType: req.file.mimetype,
     rawText: text,
     sections,
+    fileData: req.file.buffer,
+    hasFile: true,
   });
   res.status(201).json({ resume });
+}
+
+export async function getResumeFile(req, res) {
+  const r = await Resume.findById(req.params.id).select("+fileData");
+  assertOwner(r, req.user._id);
+  if (!r.hasFile || !r.fileData) {
+    throw NotFound("NO_FILE", "Original file not available for this resume.");
+  }
+  res.setHeader("Content-Type", r.mimeType || "application/octet-stream");
+  res.setHeader("Content-Disposition", `inline; filename="${(r.name || "resume").replace(/[^a-z0-9._-]/gi, "_")}"`);
+  res.send(r.fileData);
 }
 
 export async function getResume(req, res) {
@@ -298,19 +338,33 @@ export async function applyErrorHandler(req, res) {
 export async function generateInterviewHandler(req, res) {
   const resume = await loadResume(req);
   const profile = await Profile.findOne({ userId: req.user._id });
-  const count = Math.max(1, Math.min(Number(req.body.count) || 2, 4));
+
+  const ALLOWED_DIFFICULTIES = ["Easy", "Medium", "Hard", "Mixed"];
+  const ALLOWED_GROUPS = ["Behavioral", "Technical", "Role-Specific", "Culture Fit", "Resume-Based"];
+
+  const count = Math.max(1, Math.min(Number(req.body.count) || 5, 15));
+  const difficulty = ALLOWED_DIFFICULTIES.includes(req.body.difficulty)
+    ? req.body.difficulty
+    : null;
+  const group = ALLOWED_GROUPS.includes(req.body.group) ? req.body.group : null;
+  const withAnswers = req.body.withAnswers !== false;
+
   const text = resume.rawText || buildRawText(resume.sections);
   const raw = await generateInterviewQuestions(text, {
     targetRole: profile?.targetRole,
     count,
+    difficulty,
+    group,
+    withAnswers,
   });
-  // Keep history but only return the newly generated set.
+
   const docs = await InterviewQuestion.insertMany(
     raw.map((q) => ({
       resumeId: resume._id,
       userId: req.user._id,
       group: q.group,
       text: q.text,
+      answer: q.answer || "",
       difficulty: q.difficulty || "Medium",
     })),
   );
@@ -321,7 +375,7 @@ export async function listInterviewQuestions(req, res) {
   const resume = await loadResume(req);
   const questions = await InterviewQuestion.find({ resumeId: resume._id })
     .sort({ createdAt: -1 })
-    .limit(20);
+    .limit(200);
   res.json({ questions });
 }
 

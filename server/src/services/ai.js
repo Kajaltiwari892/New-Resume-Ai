@@ -455,8 +455,12 @@ IMPORTANT: Return a JSON object { "suggestions": [...] } with AT LEAST 10 sugges
 export async function generateInterviewQuestions(text, opts = {}) {
   if (!hasKey()) return generateInterviewQuestionsHeuristic(text, opts);
   try {
+    const wantAnswers = opts.withAnswers !== false;
+    const count = Number(opts.count) || 5;
     const schema = {
       type: "array",
+      minItems: count,
+      maxItems: count,
       items: {
         type: "object",
         properties: {
@@ -466,18 +470,46 @@ export async function generateInterviewQuestions(text, opts = {}) {
           },
           text: { type: "string" },
           difficulty: { type: "string", enum: ["Easy", "Medium", "Hard"] },
+          ...(wantAnswers ? { answer: { type: "string" } } : {}),
         },
-        required: ["group", "text", "difficulty"],
+        required: ["group", "text", "difficulty", ...(wantAnswers ? ["answer"] : [])],
       },
     };
-    const count = opts.count || 2;
+    const groupFilter = opts.group;
+    const difficulty = opts.difficulty && opts.difficulty !== "Mixed" ? opts.difficulty : null;
+
+    const groupClause = groupFilter
+      ? `Generate EXACTLY ${count} questions ONLY in the "${groupFilter}" group. Return an array of length ${count}. Do NOT return fewer.`
+      : `Generate EXACTLY ${count} questions total, distributed evenly across all five groups (Behavioral, Technical, Role-Specific, Culture Fit, Resume-Based). Return an array of length ${count}. Do NOT return fewer.`;
+
+    const difficultyClause = difficulty
+      ? difficulty === "Hard"
+        ? `Every question MUST be "Hard" difficulty — deeply technical, demand systems thinking, edge cases, trade-offs, or real-world ambiguity. No softball questions. Push the candidate.`
+        : difficulty === "Easy"
+          ? `Every question must be "Easy" — warm-up style, fundamental concepts, definitional, comfortable for an early-career candidate.`
+          : `Every question must be "Medium" difficulty — practical, applied, expects 2–4 minute structured answer.`
+      : `Mix difficulties (Easy, Medium, Hard) realistically.`;
+
+    const answersClause = wantAnswers
+      ? `For each question include an "answer" field containing a tight model answer (3–5 sentences, max ~110 words). The answer must be specific, structured (STAR for behavioral, trade-offs for technical), reference the candidate's resume where relevant, and read like a real senior-engineer / hiring-manager-grade response. Avoid filler. EVERY question MUST have a non-empty "answer".`
+      : ``;
+
+    // Budget: ~250 tokens per (question + answer + JSON overhead). Pad generously.
+    const tokenBudget = wantAnswers
+      ? Math.max(4000, Math.min(count * 320 + 1500, 24000))
+      : Math.max(1500, Math.min(count * 80 + 600, 6000));
+
     return await callGeminiJson({
       system:
-        "You generate interview questions grounded in the candidate's resume and target role. " +
-        "Return " + (count * 5) + " questions covering all five groups evenly.",
+        "You generate interview questions and model answers grounded in the candidate's resume and target role. " +
+        groupClause +
+        " " +
+        difficultyClause +
+        " " +
+        answersClause,
       user: `Target role: ${opts.targetRole || "(unspecified)"}\n\nResume:\n${text}`,
       schema,
-      maxOutputTokens: 1800,
+      maxOutputTokens: tokenBudget,
     });
   } catch (e) {
     console.warn("[ai] interview fallback:", e.message);

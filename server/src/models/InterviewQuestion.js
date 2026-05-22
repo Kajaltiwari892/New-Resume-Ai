@@ -12,6 +12,7 @@ const InterviewQuestionSchema = new Schema(
       required: true,
     },
     text: { type: String, required: true },
+    answer: { type: String, default: "" },
     difficulty: { type: String, enum: ["Easy", "Medium", "Hard"], default: "Medium" },
     ready: { type: Boolean, default: false },
   },

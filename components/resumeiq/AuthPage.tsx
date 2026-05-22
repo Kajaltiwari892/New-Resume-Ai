@@ -79,6 +79,7 @@ export default function AuthPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [sessionChecked, setSessionChecked] = useState(false);
   const { toasts, push, dismiss } = useToasts();
 
   // If already signed in, send them to wherever they belong.
@@ -86,8 +87,12 @@ export default function AuthPage() {
     let cancelled = false;
     (async () => {
       const user = await bootstrapSession();
-      if (cancelled || !user) return;
-      router.replace(await destinationAfterAuth());
+      if (cancelled) return;
+      if (user) {
+        router.replace(await destinationAfterAuth());
+        return;
+      }
+      setSessionChecked(true);
     })();
     return () => {
       cancelled = true;
@@ -125,6 +130,16 @@ export default function AuthPage() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (!sessionChecked) {
+    return (
+      <main className="auth-shell-v2">
+        <div className="auth-bg-grid" aria-hidden />
+        <div className="auth-bg-blob auth-bg-blob-1" aria-hidden />
+        <div className="auth-bg-blob auth-bg-blob-2" aria-hidden />
+      </main>
+    );
   }
 
   return (
@@ -201,14 +216,7 @@ export default function AuthPage() {
           </Field>
 
           <Field>
-            <div className="flex items-center justify-between">
-              <Label htmlFor="auth-password">Password</Label>
-              {mode === "login" && (
-                <Link href="#" onClick={(e) => e.preventDefault()} className="text-xs text-neutral-400 hover:text-white transition-colors">
-                  Forgot password?
-                </Link>
-              )}
-            </div>
+            <Label htmlFor="auth-password">Password</Label>
             <div className="relative">
               <Input
                 id="auth-password"

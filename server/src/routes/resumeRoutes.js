@@ -10,6 +10,7 @@ import {
   createResumeFromText,
   uploadResume,
   getResume,
+  getResumeFile,
   patchResume,
   deleteResume,
   analyzeResumeHandler,
@@ -47,6 +48,7 @@ router.post(
 router.post("/upload", uploadLimiter, uploadResumeFile, asyncHandler(uploadResume));
 
 router.get("/:id", asyncHandler(getResume));
+router.get("/:id/file", asyncHandler(getResumeFile));
 router.patch(
   "/:id",
   [

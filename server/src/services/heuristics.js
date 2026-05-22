@@ -361,20 +361,48 @@ const QUESTION_POOL = {
   ],
 };
 
-export function generateInterviewQuestionsHeuristic(_text, { count = 2 } = {}) {
+export function generateInterviewQuestionsHeuristic(
+  _text,
+  { count = 5, difficulty, group, withAnswers = true } = {},
+) {
   const result = [];
-  for (const [group, pool] of Object.entries(QUESTION_POOL)) {
+  const groups = group ? [group] : Object.keys(QUESTION_POOL);
+  // When no group filter, distribute the requested count across groups instead
+  // of taking `count` from each one (which over-produced 5× the asked amount).
+  const perGroup = group
+    ? count
+    : Math.max(1, Math.ceil(count / groups.length));
+
+  for (const g of groups) {
+    const pool = QUESTION_POOL[g];
+    if (!pool) continue;
     const shuffled = [...pool].sort(() => Math.random() - 0.5);
-    const take = shuffled.slice(0, count);
-    take.forEach((q, i) =>
+    const take = shuffled.slice(0, perGroup);
+    take.forEach((q, i) => {
+      const d =
+        difficulty && difficulty !== "Mixed"
+          ? difficulty
+          : i === 0
+            ? "Easy"
+            : i % 2 === 0
+              ? "Medium"
+              : "Hard";
       result.push({
-        group,
+        group: g,
         text: q,
-        difficulty: i % 2 === 0 ? "Medium" : "Hard",
-      }),
-    );
+        difficulty: d,
+        ...(withAnswers
+          ? {
+              answer:
+                "Sample answer unavailable in offline mode — set GEMINI_API_KEY on the server to get AI-generated model answers. " +
+                "For now, structure your reply: (1) restate the situation, (2) explain what you did and why, (3) cite a measurable outcome.",
+            }
+          : {}),
+      });
+    });
   }
-  return result;
+  // Trim to exactly the requested total when distributing across groups.
+  return group ? result : result.slice(0, count);
 }
 
 const STOP_WORDS = new Set([

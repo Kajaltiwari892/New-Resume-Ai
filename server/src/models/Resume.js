@@ -19,6 +19,8 @@ const ResumeSchema = new Schema(
     source: { type: String, enum: ["file", "paste"], required: true },
     mimeType: { type: String, default: "" },
     rawText: { type: String, default: "" },
+    fileData: { type: Buffer, default: null, select: false },
+    hasFile: { type: Boolean, default: false },
     sections: { type: SectionsSchema, default: () => ({}) },
     active: { type: Boolean, default: true },
   },
@@ -29,6 +31,7 @@ const ResumeSchema = new Schema(
         ret.id = ret._id.toString();
         delete ret._id;
         delete ret.__v;
+        delete ret.fileData;
         return ret;
       },
     },
