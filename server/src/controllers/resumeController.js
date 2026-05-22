@@ -8,6 +8,7 @@ import { Profile } from "../models/Profile.js";
 import { BadRequest, NotFound } from "../utils/httpError.js";
 import { assertOwner } from "../utils/ownership.js";
 import { parsePdf, parseDocx, parseText, splitIntoSections } from "../services/parse.js";
+import { validateResumeText } from "../services/resumeValidator.js";
 import {
   analyzeResume,
   generateSuggestions,
@@ -46,6 +47,16 @@ export async function createResumeFromText(req, res) {
   const name = String(req.body.name || "Pasted Resume").trim().slice(0, 200);
   const text = parseText(req.body.text);
   if (text.length < 50) throw BadRequest("RESUME_TOO_SHORT", "Please paste a longer resume (at least 50 characters).");
+
+  const validation = validateResumeText(text);
+  if (!validation.ok) {
+    throw BadRequest(
+      "NOT_A_RESUME",
+      "This doesn't look like a resume.",
+      validation,
+    );
+  }
+
   const sections = splitIntoSections(text);
   const resume = await Resume.create({
     userId: req.user._id,
@@ -66,8 +77,24 @@ export async function uploadResume(req, res) {
     text = await parseDocx(req.file.buffer);
   }
   if (!text || text.length < 50) {
-    throw BadRequest("PARSE_FAILED", "Couldn't extract enough text from that file. Try a different format or paste the text.");
+    throw BadRequest(
+      "PARSE_FAILED",
+      "Couldn't extract enough text from that file. If it's a scanned/image-only PDF, export a text-based PDF or paste the resume content directly.",
+    );
   }
+
+  const validation = validateResumeText(text);
+  console.log(
+    `[upload] ${req.file.originalname} — ok=${validation.ok} score=${validation.score} words=${validation.wordCount} found=[${validation.found.join("|")}] missing=[${validation.missing.join("|")}]`,
+  );
+  if (!validation.ok) {
+    throw BadRequest(
+      "NOT_A_RESUME",
+      "This file doesn't look like a resume.",
+      validation,
+    );
+  }
+
   const sections = splitIntoSections(text);
   const resume = await Resume.create({
     userId: req.user._id,

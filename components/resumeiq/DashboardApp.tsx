@@ -24,6 +24,15 @@ import {
   FiX,
   FiZap,
 } from "react-icons/fi";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { fetchResumeFileBlob } from "@/lib/resumeClient";
 import { FileSearch } from "lucide-react";
 import { Icon, type IconName } from "./Icon";
@@ -191,6 +200,15 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
   const [file, setFile] = useState<File | null>(null);
   const [pastedText, setPastedText] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [rejection, setRejection] = useState<null | {
+    code: string;
+    message: string;
+    score: number;
+    wordCount: number;
+    found: string[];
+    missing: string[];
+    hint: string;
+  }>(null);
 
   // ---- core data -------------------------------------------------------
   const [resume, setResume] = useState<Resume | null>(null);
@@ -310,6 +328,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
       return;
     }
     setSubmitting(true);
+    setRejection(null);
     try {
       let newResume: Resume;
       if (uploadTab === "file" && file) {
@@ -337,12 +356,35 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
         });
       }
     } catch (err) {
-      push({
-        kind: "error",
-        title: "Couldn't start analysis",
-        message: errorMessage(err, "Something went wrong — please try again."),
-      });
-      setMode("upload");
+      // Validator rejection — render the rich rejection panel inline.
+      if (
+        err instanceof ApiError &&
+        (err.code === "NOT_A_RESUME" || err.code === "PARSE_FAILED")
+      ) {
+        const d = (err.details as
+          | { score?: number; wordCount?: number; found?: string[]; missing?: string[]; hint?: string }
+          | undefined) || {};
+        setRejection({
+          code: err.code,
+          message: err.message,
+          score: typeof d.score === "number" ? d.score : 0,
+          wordCount: typeof d.wordCount === "number" ? d.wordCount : 0,
+          found: Array.isArray(d.found) ? d.found : [],
+          missing: Array.isArray(d.missing) ? d.missing : [err.message],
+          hint:
+            typeof d.hint === "string" && d.hint
+              ? d.hint
+              : "Upload a resume in PDF or DOCX format, or paste the resume text.",
+        });
+        setMode("upload");
+      } else {
+        push({
+          kind: "error",
+          title: "Couldn't start analysis",
+          message: errorMessage(err, "Something went wrong — please try again."),
+        });
+        setMode("upload");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -552,7 +594,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
               <button
                 type="button"
                 className={uploadTab === "file" ? "active" : ""}
-                onClick={() => setUploadTab("file")}
+                onClick={() => { setUploadTab("file"); setRejection(null); }}
                 id="ob-tab-file"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>
@@ -561,7 +603,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
               <button
                 type="button"
                 className={uploadTab === "paste" ? "active" : ""}
-                onClick={() => setUploadTab("paste")}
+                onClick={() => { setUploadTab("paste"); setRejection(null); }}
                 id="ob-tab-paste"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
@@ -576,7 +618,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
                   id="ob-file-input"
                   type="file"
                   accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFile(e.target.files?.[0] || null)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setFile(e.target.files?.[0] || null); setRejection(null); }}
                 />
                 <div className="ob-dropzone-inner">
                   {file ? (
@@ -603,7 +645,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
               <textarea
                 className="ob-paste-area"
                 value={pastedText}
-                onChange={(e) => setPastedText(e.target.value)}
+                onChange={(e) => { setPastedText(e.target.value); if (rejection) setRejection(null); }}
                 placeholder="Paste your full resume text here…"
                 rows={10}
                 aria-label="Resume text"
@@ -615,6 +657,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
               Files are parsed securely and attached only to your ResumeIQ account.
             </p>
+
 
             {/* CTA */}
             <button
@@ -1170,6 +1213,69 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
       )}
 
       <ToastStack toasts={toasts} onDismiss={dismiss} />
+
+      {/* Resume validator rejection — modal explaining why the file isn't a resume */}
+      <Dialog open={!!rejection} onOpenChange={(o) => { if (!o) setRejection(null); }}>
+        <DialogContent className="max-w-lg border-neutral-800 bg-neutral-950 text-neutral-100">
+          <DialogHeader>
+            <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-rose-500/15 text-2xl">
+              ⚠️
+            </div>
+            <DialogTitle className="text-lg font-semibold text-neutral-100">
+              {rejection?.message || "This doesn't look like a resume"}
+            </DialogTitle>
+            <DialogDescription className="text-sm leading-relaxed text-neutral-400">
+              {rejection?.hint}
+            </DialogDescription>
+          </DialogHeader>
+
+          {rejection && (rejection.missing.length > 0 || rejection.found.length > 0) && (
+            <div className="mt-2 space-y-4">
+              {rejection.missing.length > 0 && (
+                <div>
+                  <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-rose-300">
+                    What we couldn&apos;t find
+                  </h4>
+                  <ul className="space-y-1.5">
+                    {rejection.missing.map((m, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm leading-relaxed text-neutral-300">
+                        <span aria-hidden>❌</span>
+                        <span>{m}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {rejection.found.length > 0 && (
+                <div>
+                  <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-emerald-300">
+                    What we did find
+                  </h4>
+                  <ul className="space-y-1.5">
+                    {rejection.found.map((f, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm leading-relaxed text-neutral-300">
+                        <span aria-hidden>✅</span>
+                        <span>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter className="mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setRejection(null)}
+              className="border-neutral-700 bg-transparent text-sm text-neutral-100 hover:bg-neutral-900 hover:text-white"
+            >
+              Try a different file
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
