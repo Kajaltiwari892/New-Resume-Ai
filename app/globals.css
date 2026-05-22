@@ -1844,31 +1844,55 @@ button:hover {
 .dashboard {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: minmax(220px, 20%) minmax(0, 1fr) 6px var(--panel-width, 380px);
+  grid-template-columns: minmax(220px, 20%) minmax(0, 1fr) 380px;
+  transition: grid-template-columns 0.25s ease;
 }
 
-.resize-handle {
-  cursor: col-resize;
-  background: transparent;
-  position: relative;
-  user-select: none;
-  z-index: 5;
+.dashboard.panel-collapsed {
+  grid-template-columns: minmax(220px, 20%) minmax(0, 1fr) 36px;
 }
 
-.resize-handle::before {
-  content: "";
+.analysis-sheet-toggle {
+  display: none;
+}
+
+.analysis-collapse-toggle {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 2px;
-  width: 2px;
-  background: rgba(148, 163, 184, 0.12);
-  transition: background 0.15s;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  margin: 0;
+  background: #1f1f1f;
+  border: 1px solid #333;
+  border-radius: 50%;
+  color: #e5e7eb;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
+  transition: background 0.12s, border-color 0.12s, color 0.12s, transform 0.12s;
 }
 
-.resize-handle:hover::before,
-.resize-handle:active::before {
-  background: rgba(124, 58, 237, 0.6);
+.analysis-collapse-toggle:hover {
+  background: #2a1a4a;
+  border-color: #6d28d9;
+  color: #fff;
+  transform: scale(1.08);
+}
+
+/* Collapsed: center the toggle in the narrow rail */
+.dashboard.panel-collapsed .analysis-collapse-toggle {
+  top: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.dashboard.panel-collapsed .analysis-collapse-toggle:hover {
+  transform: translateX(-50%) scale(1.08);
 }
 
 .analysis-sheet-toggle {
@@ -5043,8 +5067,21 @@ button:hover {
 }
 
 .dashboard .resume-workbench .topbar {
+  max-width: none;
+  margin: 0 0 1rem;
   padding: 1.5rem 2rem 0;
-  margin-bottom: 1rem;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.dashboard .resume-workbench .topbar > div:not(.topbar-actions) {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+}
+
+.dashboard .resume-workbench .topbar-actions {
+  margin-left: auto;
 }
 
 .dashboard .topbar small {
@@ -5091,22 +5128,33 @@ button:hover {
   position: sticky;
   top: 0;
   height: 100vh;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 1.25rem;
+  overflow: hidden;
+  padding: 0;
   background: #0a0a0a;
   border: 0;
   border-left: 1px solid #181818;
   backdrop-filter: none;
   box-shadow: none;
+}
+
+.dashboard .analysis-panel-scroll {
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 3.25rem 1.25rem 1.25rem;
   scrollbar-width: thin;
   scrollbar-color: #2a2a2a transparent;
 }
 
-.dashboard .analysis-panel::-webkit-scrollbar {
+/* Collapsed state: hide content, leave only the toggle button visible */
+.dashboard.panel-collapsed .analysis-panel > *:not(.analysis-collapse-toggle) {
+  display: none;
+}
+
+.dashboard .analysis-panel-scroll::-webkit-scrollbar {
   width: 6px;
 }
-.dashboard .analysis-panel::-webkit-scrollbar-thumb {
+.dashboard .analysis-panel-scroll::-webkit-scrollbar-thumb {
   background: #2a2a2a;
   border-radius: 4px;
 }
@@ -5274,6 +5322,21 @@ button:hover {
 .dashboard .apply-all:hover,
 .dashboard .panel-cta:hover {
   background: #e5e5e5;
+  color: #000;
+}
+
+/* Error tab "Suggest rewrite" sits inside .issue-card but uses dark styling
+   — keep its text light on hover so it doesn't disappear. */
+.dashboard .error-card .error-actions button {
+  background: #141414;
+  color: #e5e5e5;
+  border: 1px solid #222;
+}
+
+.dashboard .error-card .error-actions button:hover:not(:disabled) {
+  background: #1c1c1c;
+  color: #fff;
+  border-color: #333;
 }
 
 .dashboard .suggestion-card del {
@@ -5495,40 +5558,67 @@ button:hover {
   .dashboard.analysis-open .analysis-panel {
     height: 80vh;
     max-height: 80vh;
-    overflow-y: auto;
+  }
+
+  /* Scroll wrapper resets its desktop padding on mobile (sheet-head handles top) */
+  .dashboard .analysis-panel-scroll {
     padding: 0;
   }
-
-  .dashboard .analysis-panel > .tabs,
-  .dashboard .analysis-panel > .tab-panel {
-    padding-left: 1rem;
-    padding-right: 1rem;
-  }
-  .dashboard .analysis-panel > .tab-panel {
-    padding-bottom: 1rem;
-  }
-  .dashboard .analysis-panel > .tabs {
-    margin-top: 0.75rem;
+  .dashboard .analysis-panel-scroll .tab-panel {
+    padding: 0.75rem 1rem 1rem;
   }
 
-  /* Up-arrow handle docked at top of the sheet */
-  .dashboard .analysis-sheet-toggle {
-    display: flex;
+  /* Sheet head: tabs row + toggle, sticky at top of the sheet, always visible */
+  .dashboard .analysis-sheet-head {
     position: sticky;
     top: 0;
-    width: 100%;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
     height: 56px;
+    padding: 0 0.6rem 0 0.75rem;
+    background: #0a0a0a;
+    border-bottom: 1px solid #181818;
+  }
+
+  .dashboard .analysis-sheet-head .tabs {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .dashboard .analysis-sheet-head .tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Desktop collapse button is hidden on mobile — bottom sheet replaces it */
+  .dashboard .analysis-collapse-toggle {
+    display: none;
+  }
+  /* Mobile ignores the desktop collapsed state */
+  .dashboard.panel-collapsed .analysis-panel > *:not(.analysis-collapse-toggle) {
+    display: revert;
+  }
+
+  /* Toggle: small icon-only chevron on the right of the sheet head */
+  .dashboard .analysis-sheet-toggle {
+    display: inline-flex;
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
     align-items: center;
     justify-content: center;
-    gap: 0.5rem;
-    background: #0a0a0a;
-    border: 0;
-    border-bottom: 1px solid #181818;
+    padding: 0;
+    background: #141414;
+    border: 1px solid #1f1f1f;
+    border-radius: 8px;
     color: #e5e7eb;
-    font-size: 0.85rem;
-    font-weight: 500;
     cursor: pointer;
-    z-index: 2;
   }
   .dashboard .analysis-sheet-toggle svg {
     transition: transform 0.25s ease;
@@ -6428,6 +6518,738 @@ body:has(.dashboard) {
   to   { opacity: 1; transform: translateY(0); }
 }
 /* ─── End Rich Suggestion Cards ──────────────────────────────────────────── */
+
+/* ─── My Resumes page ────────────────────────────────────────────────────── */
+.resumes-page {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1.5rem 2rem 3rem;
+}
+
+.resumes-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 1.5rem;
+  background: #0a0a0a;
+  border: 1px solid #1a1a1a;
+  border-radius: 12px;
+}
+
+.resumes-toolbar-meta {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  color: #d4d4d4;
+  font-size: 0.9rem;
+}
+
+.resumes-toolbar-meta b {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.resumes-toolbar-meta span {
+  color: #888;
+}
+
+.resumes-new-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  height: 38px;
+  padding: 0 0.95rem;
+  background: linear-gradient(135deg, #7c3aed, #5b21b6);
+  border: 0;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+
+.resumes-new-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(124, 58, 237, 0.35);
+}
+
+.resumes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.1rem;
+}
+
+.resume-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: #0a0a0a;
+  border: 1px solid #1a1a1a;
+  border-radius: 14px;
+  overflow: hidden;
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+
+.resume-card:hover {
+  border-color: #2a2a2a;
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+}
+
+.resume-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 1.1rem 1.1rem 0.6rem;
+}
+
+.resume-card-thumb {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 64px;
+  border-radius: 8px;
+  background: #141414;
+  border: 1px solid #222;
+  color: #c4b5fd;
+  position: relative;
+  gap: 0.25rem;
+}
+
+.resume-card-thumb.kind-pdf {
+  background: linear-gradient(160deg, #2a0e10, #140404);
+  border-color: #4a1a1f;
+  color: #fca5a5;
+}
+
+.resume-card-thumb.kind-docx {
+  background: linear-gradient(160deg, #0e1a2a, #040814);
+  border-color: #1a3a5a;
+  color: #93c5fd;
+}
+
+.resume-card-thumb.kind-text {
+  background: linear-gradient(160deg, #1a0e2a, #0a0414);
+  border-color: #3a2a5a;
+  color: #c4b5fd;
+}
+
+.resume-card-kind {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: inherit;
+  opacity: 0.85;
+}
+
+.resume-card-active-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 0.55rem;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: 999px;
+  color: #6ee7b7;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.resume-card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.4rem 1.1rem 1rem;
+  min-width: 0;
+}
+
+.resume-card-name {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fafafa;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+}
+
+.resume-card-source {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #999;
+}
+
+.resume-card-meta {
+  list-style: none;
+  margin: 0.3rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.resume-card-meta li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.75rem;
+  color: #999;
+}
+
+.resume-card-meta li svg {
+  color: #666;
+  flex-shrink: 0;
+}
+
+.resume-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.1rem;
+  border-top: 1px solid #161616;
+  background: #060606;
+}
+
+.resume-card-open {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  height: 36px;
+  padding: 0 0.9rem;
+  background: #141414;
+  border: 1px solid #1f1f1f;
+  border-radius: 8px;
+  color: #e5e7eb;
+  font-size: 0.82rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.resume-card-open:hover {
+  background: #1c1c1c;
+  border-color: #2a2a2a;
+  color: #fff;
+}
+
+.resume-card-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: #141414;
+  border: 1px solid #1f1f1f;
+  border-radius: 8px;
+  color: #fca5a5;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.resume-card-delete:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #fecaca;
+}
+
+.resume-card-delete:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Empty state */
+.resumes-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  padding: 3.5rem 1.5rem;
+  background: #0a0a0a;
+  border: 1px dashed #222;
+  border-radius: 14px;
+  text-align: center;
+}
+
+.resumes-empty-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(124, 58, 237, 0.12);
+  color: #c4b5fd;
+  margin-bottom: 0.25rem;
+}
+
+.resumes-empty h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.resumes-empty p {
+  margin: 0 0 0.6rem;
+  color: #888;
+  font-size: 0.88rem;
+  max-width: 420px;
+}
+
+/* Skeleton */
+.resume-card-skeleton {
+  pointer-events: none;
+}
+
+.resume-card-skeleton .resume-card-thumb {
+  width: 56px;
+  height: 64px;
+  background: #141414;
+  border-color: #1c1c1c;
+}
+
+.skeleton-line {
+  display: block;
+  width: 100%;
+  height: 10px;
+  background: linear-gradient(90deg, #141414 0%, #1f1f1f 50%, #141414 100%);
+  background-size: 200% 100%;
+  border-radius: 6px;
+  animation: shimmer 1.4s linear infinite;
+}
+
+.skeleton-line-lg {
+  height: 14px;
+  width: 70%;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Reuse dashboard chrome for the SidebarShell wrapper used by this page */
+.dashboard.sidebar-shell {
+  grid-template-columns: minmax(220px, 20%) minmax(0, 1fr);
+}
+
+.dashboard.sidebar-shell .resume-workbench.shell-main {
+  padding: 0;
+  height: 100vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.dashboard.sidebar-shell .resume-workbench.shell-main .topbar {
+  padding: 1.25rem 2rem 0;
+  margin: 0 0 0.5rem;
+  max-width: none;
+  flex-shrink: 0;
+}
+
+@media (max-width: 1100px) {
+  .resumes-page {
+    padding: 1.25rem 1.25rem 6rem;
+  }
+  .dashboard.sidebar-shell .resume-workbench.shell-main {
+    height: auto;
+    overflow: visible;
+  }
+  .dashboard.sidebar-shell .resume-workbench.shell-main .topbar {
+    padding: 0.85rem 1.25rem 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .resumes-page {
+    padding: 1rem 1rem 5rem;
+  }
+  .resumes-grid {
+    grid-template-columns: 1fr;
+  }
+  .resumes-toolbar {
+    padding: 0.8rem 1rem;
+  }
+}
+/* ─── End My Resumes page ────────────────────────────────────────────────── */
+
+/* ─── Shared clean primary button (landing-CTA style) ────────────────────── */
+.cta-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  padding: 0.78rem 1.55rem;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 0.75rem;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.92rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.3s ease, color 0.25s ease, transform 0.25s ease;
+}
+
+.cta-button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(115deg,
+      rgba(124, 58, 237, 0.55) 0%,
+      rgba(6, 182, 212, 0.45) 45%,
+      rgba(244, 114, 182, 0.4) 100%);
+  opacity: 0;
+  z-index: -1;
+  transition: opacity 0.4s ease;
+}
+
+.cta-button:hover:not(:disabled)::before {
+  opacity: 1;
+}
+
+.cta-button:hover:not(:disabled) {
+  border-color: rgba(139, 92, 246, 0.6);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.cta-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.cta-button svg {
+  flex-shrink: 0;
+}
+/* ─── End shared CTA ─────────────────────────────────────────────────────── */
+
+/* ─── Interview Prep page ────────────────────────────────────────────────── */
+.interview-page {
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 1.5rem 2rem 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.interview-hero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1.5rem 1.75rem;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(124, 58, 237, 0.18), transparent 60%),
+    radial-gradient(circle at 100% 100%, rgba(6, 182, 212, 0.12), transparent 60%),
+    #0a0a0a;
+  border: 1px solid #1a1a1a;
+  border-radius: 16px;
+}
+
+.interview-hero-text h2 {
+  margin: 0 0 0.45rem;
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: #fafafa;
+  letter-spacing: -0.01em;
+}
+
+.interview-hero-text p {
+  margin: 0;
+  color: #aaa;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  max-width: 540px;
+}
+
+.interview-hero-text b {
+  color: #e5e7eb;
+  font-weight: 600;
+}
+
+.interview-hero-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.interview-select {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 200px;
+}
+
+.interview-select small {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #888;
+}
+
+.interview-select select {
+  height: 44px;
+  padding: 0 0.85rem;
+  background: #141414;
+  border: 1px solid #2a2a2a;
+  border-radius: 0.7rem;
+  color: #e5e7eb;
+  font-size: 0.9rem;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2rem;
+}
+
+.interview-select select:focus {
+  outline: none;
+  border-color: #6d28d9;
+}
+
+.interview-error {
+  padding: 0.75rem 1rem;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 10px;
+  color: #fecaca;
+  font-size: 0.88rem;
+}
+
+.interview-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  padding: 3rem 1.5rem;
+  background: #0a0a0a;
+  border: 1px dashed #222;
+  border-radius: 14px;
+  text-align: center;
+  color: #888;
+}
+
+.interview-placeholder svg {
+  color: #6d28d9;
+}
+
+.interview-placeholder h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #f5f5f5;
+}
+
+.interview-placeholder p {
+  margin: 0;
+  font-size: 0.88rem;
+  max-width: 380px;
+}
+
+.interview-placeholder b {
+  color: #d4d4d4;
+}
+
+.interview-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 4rem 1.5rem;
+  text-align: center;
+}
+
+.interview-empty-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(124, 58, 237, 0.14);
+  color: #c4b5fd;
+  margin-bottom: 0.25rem;
+}
+
+.interview-empty h2 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: #fff;
+}
+
+.interview-empty p {
+  margin: 0 0 0.75rem;
+  color: #999;
+  max-width: 420px;
+}
+
+.interview-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.interview-group {
+  background: #0a0a0a;
+  border: 1px solid #1a1a1a;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.interview-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  background: linear-gradient(180deg, #0f0f0f, #0a0a0a);
+  border-bottom: 1px solid #1a1a1a;
+}
+
+.interview-group-head h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #fafafa;
+  letter-spacing: -0.01em;
+}
+
+.interview-group-count {
+  font-size: 0.75rem;
+  color: #888;
+  font-weight: 500;
+}
+
+.interview-question-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.interview-question {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #141414;
+}
+
+.interview-question:last-child {
+  border-bottom: 0;
+}
+
+.interview-question-num {
+  flex-shrink: 0;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(124, 58, 237, 0.15);
+  color: #c4b5fd;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.interview-question-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.interview-question-body p {
+  margin: 0;
+  color: #e5e7eb;
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+.interview-pill {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  padding: 0.18rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.interview-pill.easy {
+  background: rgba(16, 185, 129, 0.15);
+  color: #6ee7b7;
+}
+
+.interview-pill.medium {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fcd34d;
+}
+
+.interview-pill.hard {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+}
+
+@media (max-width: 1100px) {
+  .interview-page {
+    padding: 1.25rem 1.25rem 6rem;
+  }
+  .interview-hero {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .interview-hero-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .interview-select {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .interview-page {
+    padding: 1rem 1rem 5rem;
+  }
+  .interview-hero {
+    padding: 1.25rem;
+  }
+  .interview-hero-text h2 {
+    font-size: 1.2rem;
+  }
+}
+/* ─── End Interview Prep page ────────────────────────────────────────────── */
 
 @layer base {
   * {

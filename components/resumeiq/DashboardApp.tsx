@@ -4,23 +4,22 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   FiArrowLeft,
+  FiChevronLeft,
+  FiChevronRight,
   FiChevronUp,
   FiClock,
   FiFileText,
   FiGrid,
-  FiHelpCircle,
   FiLogOut,
   FiMenu,
   FiMessageSquare,
   FiPlus,
-  FiSearch,
   FiSettings,
   FiX,
   FiZap,
@@ -44,12 +43,10 @@ import {
   getAnalysis,
   getOnboarding,
   listResumes,
-  matchKeywords as matchKeywordsApi,
   rewriteError as rewriteErrorApi,
   uploadResume,
   type Analysis,
   type InterviewQuestion,
-  type KeywordMatch,
   type Profile,
   type Resume,
   type ResumeErrorRecord,
@@ -58,7 +55,7 @@ import {
 
 type Mode = "upload" | "analyzing" | "dashboard";
 type UploadTab = "file" | "paste";
-type TabKey = "Score" | "Errors" | "Suggestions" | "Interview" | "Keywords";
+type TabKey = "Score" | "Errors" | "Suggestions" | "Interview";
 
 const BAR_ICON_BY_KEY: Record<string, IconName> = {
   ats: "target",
@@ -201,52 +198,18 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
   const [previousAnalysis, setPreviousAnalysis] = useState<Analysis | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [suggestionsLoaded, setSuggestionsLoaded] = useState(false);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [resumeErrors, setResumeErrors] = useState<ResumeErrorRecord[]>([]);
   const [errorsLoaded, setErrorsLoaded] = useState(false);
   const [errorsLoading, setErrorsLoading] = useState(false);
   const [rewritingErrorId, setRewritingErrorId] = useState<string | null>(null);
   const [interviewQuestions, setInterviewQuestions] = useState<InterviewQuestion[]>([]);
-  const [interviewLoaded, setInterviewLoaded] = useState(false);
   const [interviewLoading, setInterviewLoading] = useState(false);
-  const [keywordMatch, setKeywordMatch] = useState<KeywordMatch | null>(null);
-  const [keywordLoading, setKeywordLoading] = useState(false);
-  const [jobDescription, setJobDescription] = useState("");
-
-  // ---- editor state ----------------------------------------------------
+  // ---- panel UI state --------------------------------------------------
   const [activeTab, setActiveTab] = useState<TabKey>("Score");
   const [accordion, setAccordion] = useState<string>("Behavioral");
-  const [panelWidth, setPanelWidth] = useState<number>(380);
   const [analysisSheetOpen, setAnalysisSheetOpen] = useState<boolean>(false);
-  const resizingRef = useRef<boolean>(false);
-
-  // Resize handle: drag to change analysis panel width (desktop only).
-  useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      if (!resizingRef.current) return;
-      const next = window.innerWidth - e.clientX;
-      setPanelWidth(Math.max(300, Math.min(720, next)));
-    };
-    const onUp = () => {
-      if (!resizingRef.current) return;
-      resizingRef.current = false;
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-  }, []);
-
-  const startResize = useCallback(() => {
-    resizingRef.current = true;
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-  }, []);
+  const [analysisCollapsed, setAnalysisCollapsed] = useState<boolean>(false);
 
   // Live-rotating analyzing message.
   useEffect(() => {
@@ -388,18 +351,13 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
   function resetDerivedData() {
     setAnalysis(null);
     setSuggestions([]);
-    setSuggestionsLoaded(false);
     setSuggestionsLoading(false);
     setResumeErrors([]);
     setErrorsLoaded(false);
     setErrorsLoading(false);
     setRewritingErrorId(null);
     setInterviewQuestions([]);
-    setInterviewLoaded(false);
     setInterviewLoading(false);
-    setKeywordMatch(null);
-    setKeywordLoading(false);
-    setJobDescription("");
   }
 
   function handleStartNewResume() {
@@ -426,8 +384,6 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
     setMode("dashboard");
   }
 
-  // ---- resume editing removed (read-only viewer) -----------------------
-
   // ---- analysis / suggestions / interview / keywords -------------------
 
   async function handleReanalyze() {
@@ -443,7 +399,6 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
     try {
       const { suggestions: next } = await generateSuggestionsApi(resume.id);
       setSuggestions(next);
-      setSuggestionsLoaded(true);
     } catch (err) {
       push({
         kind: "error",
@@ -461,7 +416,6 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
     try {
       const { questions } = await generateInterviewQuestionsApi(resume.id, 2);
       setInterviewQuestions(questions);
-      setInterviewLoaded(true);
       const firstGroup = questions[0]?.group;
       if (firstGroup) setAccordion(firstGroup);
     } catch (err) {
@@ -510,62 +464,6 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
     }
   }
 
-  // Auto-load tabs the first time they're opened.
-  useEffect(() => {
-    if (mode !== "dashboard" || !resume) return;
-    if (activeTab === "Errors" && !errorsLoaded && !errorsLoading) {
-      void Promise.resolve().then(loadErrors);
-    }
-    if (activeTab === "Suggestions" && !suggestionsLoaded && !suggestionsLoading) {
-      void Promise.resolve().then(loadSuggestions);
-    }
-    if (activeTab === "Interview" && !interviewLoaded && !interviewLoading) {
-      void Promise.resolve().then(loadInterview);
-    }
-  }, [
-    activeTab,
-    mode,
-    resume,
-    errorsLoaded,
-    errorsLoading,
-    suggestionsLoaded,
-    suggestionsLoading,
-    interviewLoaded,
-    interviewLoading,
-    loadErrors,
-    loadSuggestions,
-    loadInterview,
-  ]);
-
-  // Debounced keyword match.
-  const keywordRequestId = useRef(0);
-  useEffect(() => {
-    if (!resume) return;
-    const text = jobDescription.trim();
-    if (text.length < 30) {
-      const clearTimer = window.setTimeout(() => setKeywordMatch(null), 0);
-      return () => window.clearTimeout(clearTimer);
-    }
-    const myId = ++keywordRequestId.current;
-    const timer = window.setTimeout(async () => {
-      setKeywordLoading(true);
-      try {
-        const { match } = await matchKeywordsApi(resume.id, text);
-        if (myId === keywordRequestId.current) setKeywordMatch(match);
-      } catch (err) {
-        if (myId === keywordRequestId.current) {
-          push({
-            kind: "error",
-            title: "Keyword match failed",
-            message: errorMessage(err, "Try a longer description."),
-          });
-        }
-      } finally {
-        if (myId === keywordRequestId.current) setKeywordLoading(false);
-      }
-    }, 700);
-    return () => window.clearTimeout(timer);
-  }, [jobDescription, resume, push]);
 
   async function handleLogout() {
     try {
@@ -785,8 +683,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
 
       {mode === "dashboard" && resume && (
         <section
-          className={`dashboard ${mobileNavOpen ? "nav-open" : ""} ${analysisSheetOpen ? "analysis-open" : ""}`}
-          style={{ "--panel-width": `${panelWidth}px` } as React.CSSProperties}
+          className={`dashboard ${mobileNavOpen ? "nav-open" : ""} ${analysisSheetOpen ? "analysis-open" : ""} ${analysisCollapsed ? "panel-collapsed" : ""}`}
         >
           {mobileNavOpen && (
             <div
@@ -875,18 +772,11 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
                 <FiMenu size={18} />
               </button>
               <div>
-                <small>Resume Preview</small>
                 <h1>{resumeFileName}</h1>
               </div>
               <div className="topbar-actions">
                 <button onClick={handleReanalyze} title="Re-run analysis">
                   <FiZap size={14} /> Re-analyze
-                </button>
-                <button aria-label="Search" title="Search">
-                  <FiSearch size={15} />
-                </button>
-                <button aria-label="Help" title="Help">
-                  <FiHelpCircle size={15} />
                 </button>
               </div>
             </div>
@@ -894,48 +784,48 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
             <ResumeFileViewer key={resume.id} resume={resume} />
           </section>
 
-          <div
-            className="resize-handle"
-            onMouseDown={startResize}
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Resize analysis panel"
-          />
-
           <aside className="analysis-panel">
             <button
               type="button"
-              className="analysis-sheet-toggle"
-              onClick={() => setAnalysisSheetOpen((open) => !open)}
-              aria-label={analysisSheetOpen ? "Hide insights" : "Show insights"}
-              aria-expanded={analysisSheetOpen}
+              className="analysis-collapse-toggle"
+              onClick={() => setAnalysisCollapsed((c) => !c)}
+              aria-label={analysisCollapsed ? "Expand insights panel" : "Collapse insights panel"}
+              aria-expanded={!analysisCollapsed}
+              title={analysisCollapsed ? "Expand insights" : "Collapse insights"}
             >
-              <FiChevronUp size={18} />
-              <span>{analysisSheetOpen ? "Hide insights" : "Show insights"}</span>
+              {analysisCollapsed ? <FiChevronLeft size={18} /> : <FiChevronRight size={18} />}
             </button>
-            <div className="tabs">
-              {(["Score", "Errors", "Suggestions", "Interview", "Keywords"] as TabKey[]).map((tab) => (
-                <button
-                  key={tab}
-                  className={activeTab === tab ? "active" : ""}
-                  onClick={() => setActiveTab(tab)}
-                >
-                  {tab}
-                </button>
-              ))}
+            <div className="analysis-panel-scroll">
+            <div className="analysis-sheet-head">
+              <div className="tabs">
+                {(["Score", "Errors", "Suggestions", "Interview"] as TabKey[]).map((tab) => (
+                  <button
+                    key={tab}
+                    className={activeTab === tab ? "active" : ""}
+                    onClick={() => {
+                      setActiveTab(tab);
+                      setAnalysisSheetOpen(true);
+                    }}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="analysis-sheet-toggle"
+                onClick={() => setAnalysisSheetOpen((open) => !open)}
+                aria-label={analysisSheetOpen ? "Close insights" : "Open insights"}
+                aria-expanded={analysisSheetOpen}
+              >
+                <FiChevronUp size={18} />
+              </button>
             </div>
 
             {activeTab === "Score" && (
               <div className="tab-panel">
                 {analysis ? (
                   <>
-                    <div
-                      className="score-dial"
-                      style={{ "--score": analysis.overallScore } as React.CSSProperties}
-                    >
-                      <strong>{analysis.overallScore}</strong>
-                      <span>/100</span>
-                    </div>
                     {/* Score dial + grade */}
                     <div className="score-header">
                       <div
@@ -1274,59 +1164,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
               </div>
             )}
 
-            {activeTab === "Keywords" && (
-              <div className="tab-panel">
-                <textarea
-                  className="job-input"
-                  value={jobDescription}
-                  onChange={(e) => setJobDescription(e.target.value)}
-                  placeholder="Paste Job Description to enable keyword matching..."
-                  rows={6}
-                />
-                {keywordLoading && (
-                  <p className="empty-panel">
-                    <span>Matching keywords…</span>
-                  </p>
-                )}
-                {keywordMatch && (
-                  <>
-                    <div className="word-cloud">
-                      {[...keywordMatch.found, ...keywordMatch.missing].map((word, idx) => (
-                        <span
-                          className={idx < keywordMatch.found.length ? "found" : "missing"}
-                          key={`${idx}-${word}`}
-                        >
-                          {word}
-                        </span>
-                      ))}
-                    </div>
-                    <div className="keyword-columns">
-                      <div>
-                        <h3>Found in Resume</h3>
-                        {keywordMatch.found.length === 0 && <p className="empty-line">None found yet.</p>}
-                        {keywordMatch.found.map((word, idx) => (
-                          <span key={`${idx}-${word}`}>
-                            <Icon name="check" /> {word}
-                          </span>
-                        ))}
-                      </div>
-                      <div>
-                        <h3>Missing</h3>
-                        {keywordMatch.missing.length === 0 && (
-                          <p className="empty-line">Great — nothing obvious is missing.</p>
-                        )}
-                        {keywordMatch.missing.map((word, idx) => (
-                          <span key={`${idx}-${word}`}>× {word}</span>
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                )}
-                {!keywordLoading && !keywordMatch && jobDescription.trim().length < 30 && (
-                  <p className="empty-line">Paste at least 30 characters to match keywords.</p>
-                )}
-              </div>
-            )}
+            </div>
           </aside>
         </section>
       )}
