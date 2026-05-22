@@ -10,6 +10,8 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  FiArrowLeft,
+  FiChevronUp,
   FiClock,
   FiFileText,
   FiGrid,
@@ -195,6 +197,8 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
 
   // ---- core data -------------------------------------------------------
   const [resume, setResume] = useState<Resume | null>(null);
+  const [previousResume, setPreviousResume] = useState<Resume | null>(null);
+  const [previousAnalysis, setPreviousAnalysis] = useState<Analysis | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [suggestionsLoaded, setSuggestionsLoaded] = useState(false);
@@ -213,6 +217,36 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
   // ---- editor state ----------------------------------------------------
   const [activeTab, setActiveTab] = useState<TabKey>("Score");
   const [accordion, setAccordion] = useState<string>("Behavioral");
+  const [panelWidth, setPanelWidth] = useState<number>(380);
+  const [analysisSheetOpen, setAnalysisSheetOpen] = useState<boolean>(false);
+  const resizingRef = useRef<boolean>(false);
+
+  // Resize handle: drag to change analysis panel width (desktop only).
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!resizingRef.current) return;
+      const next = window.innerWidth - e.clientX;
+      setPanelWidth(Math.max(300, Math.min(720, next)));
+    };
+    const onUp = () => {
+      if (!resizingRef.current) return;
+      resizingRef.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, []);
+
+  const startResize = useCallback(() => {
+    resizingRef.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }, []);
 
   // Live-rotating analyzing message.
   useEffect(() => {
@@ -372,11 +406,24 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
     setFile(null);
     setPastedText("");
     setUploadTab("file");
+    if (resume) {
+      setPreviousResume(resume);
+      setPreviousAnalysis(analysis);
+    }
     setResume(null);
     resetDerivedData();
     setActiveTab("Score");
     setMobileNavOpen(false);
     setMode("upload");
+  }
+
+  function handleBackToDashboard() {
+    if (!previousResume) return;
+    setResume(previousResume);
+    setAnalysis(previousAnalysis);
+    setFile(null);
+    setPastedText("");
+    setMode("dashboard");
   }
 
   // ---- resume editing removed (read-only viewer) -----------------------
@@ -579,6 +626,17 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
 
       {mode === "upload" && (
         <section className="ob-stage" aria-label="Upload your resume">
+          {previousResume && (
+            <button
+              type="button"
+              className="analyzing-back-btn"
+              onClick={handleBackToDashboard}
+              aria-label="Back to dashboard"
+            >
+              <FiArrowLeft size={16} />
+              <span>Back to Dashboard</span>
+            </button>
+          )}
           <div className="ob-card glass-panel">
             {/* Brand */}
             <div className="ob-brand">
@@ -690,6 +748,23 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
 
       {mode === "analyzing" && (
         <section className="analysis-overlay">
+          <button
+            type="button"
+            className="analyzing-back-btn"
+            onClick={() => {
+              if (previousResume) {
+                handleBackToDashboard();
+              } else if (resume) {
+                setMode("dashboard");
+              } else {
+                setMode("upload");
+              }
+            }}
+            aria-label="Back to dashboard"
+          >
+            <FiArrowLeft size={16} />
+            <span>Back</span>
+          </button>
           <div className="particle-field">
             {Array.from({ length: 18 }).map((_, index) => (
               <span key={index} style={{ "--i": index } as React.CSSProperties} />
@@ -709,7 +784,10 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
       )}
 
       {mode === "dashboard" && resume && (
-        <section className={`dashboard ${mobileNavOpen ? "nav-open" : ""}`}>
+        <section
+          className={`dashboard ${mobileNavOpen ? "nav-open" : ""} ${analysisSheetOpen ? "analysis-open" : ""}`}
+          style={{ "--panel-width": `${panelWidth}px` } as React.CSSProperties}
+        >
           {mobileNavOpen && (
             <div
               className="mobile-nav-backdrop"
@@ -816,7 +894,25 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
             <ResumeFileViewer key={resume.id} resume={resume} />
           </section>
 
+          <div
+            className="resize-handle"
+            onMouseDown={startResize}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize analysis panel"
+          />
+
           <aside className="analysis-panel">
+            <button
+              type="button"
+              className="analysis-sheet-toggle"
+              onClick={() => setAnalysisSheetOpen((open) => !open)}
+              aria-label={analysisSheetOpen ? "Hide insights" : "Show insights"}
+              aria-expanded={analysisSheetOpen}
+            >
+              <FiChevronUp size={18} />
+              <span>{analysisSheetOpen ? "Hide insights" : "Show insights"}</span>
+            </button>
             <div className="tabs">
               {(["Score", "Errors", "Suggestions", "Interview", "Keywords"] as TabKey[]).map((tab) => (
                 <button
