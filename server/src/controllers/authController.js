@@ -56,6 +56,9 @@ function publicUser(user) {
     name: user.name,
     role: user.role,
     emailVerified: user.emailVerified,
+    plan: user.plan || "free",
+    planStatus: user.planStatus || null,
+    planRenewsAt: user.planRenewsAt || null,
   };
 }
 

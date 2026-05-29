@@ -62,6 +62,25 @@ export const env = {
     apiKey: optional("GEMINI_API_KEY", ""),
     model: optional("GEMINI_MODEL", "gemini-2.5-flash"),
   },
+
+  stripe: {
+    // Optional so the server still boots without billing configured. The
+    // billing endpoints return a clear error when the secret key is missing.
+    secretKey: optional("STRIPE_SECRET_KEY", ""),
+    webhookSecret: optional("STRIPE_WEBHOOK_SECRET", ""),
+    currency: optional("STRIPE_CURRENCY", "inr"),
+    // Paid tiers. Amounts in the currency's smallest unit (paise): ₹199 / ₹499.
+    tiers: {
+      plus: {
+        amount: int("STRIPE_PRICE_PLUS_AMOUNT", 19900),
+        name: optional("STRIPE_PLAN_PLUS_NAME", "ResumeIQ Plus"),
+      },
+      pro: {
+        amount: int("STRIPE_PRICE_PRO_AMOUNT", 49900),
+        name: optional("STRIPE_PLAN_PRO_NAME", "ResumeIQ Pro"),
+      },
+    },
+  },
 };
 
 if (env.jwt.accessSecret === env.jwt.refreshSecret) {

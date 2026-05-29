@@ -10,6 +10,9 @@ import { connectDB } from "./config/db.js";
 import authRoutes from "./routes/authRoutes.js";
 import onboardingRoutes from "./routes/onboardingRoutes.js";
 import resumeRoutes from "./routes/resumeRoutes.js";
+import billingRoutes from "./routes/billingRoutes.js";
+import { handleWebhook } from "./controllers/billingController.js";
+import { asyncHandler } from "./middleware/asyncHandler.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
 
 const app = express();
@@ -47,6 +50,14 @@ app.use(
   }),
 );
 
+// Stripe webhook needs the raw body for signature verification, so it MUST be
+// registered before the JSON body parser below.
+app.post(
+  "/api/billing/webhook",
+  express.raw({ type: "application/json" }),
+  asyncHandler(handleWebhook),
+);
+
 app.use(express.json({ limit: "100kb" }));
 app.use(express.urlencoded({ extended: false, limit: "100kb" }));
 app.use(cookieParser());
@@ -61,6 +72,7 @@ app.get("/health", (_req, res) => res.json({ ok: true }));
 app.use("/api/auth", authRoutes);
 app.use("/api/onboarding", onboardingRoutes);
 app.use("/api/resumes", resumeRoutes);
+app.use("/api/billing", billingRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

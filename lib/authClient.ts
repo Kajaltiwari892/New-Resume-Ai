@@ -8,6 +8,9 @@ export type PublicUser = {
   name: string;
   role: "user" | "admin";
   emailVerified: boolean;
+  plan?: "free" | "plus" | "pro";
+  planStatus?: string | null;
+  planRenewsAt?: string | null;
 };
 
 type AuthResponse = { user: PublicUser; accessToken: string };

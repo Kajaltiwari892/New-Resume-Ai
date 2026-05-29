@@ -36,6 +36,13 @@ const UserSchema = new Schema(
 
     role: { type: String, enum: ["user", "admin"], default: "user" },
 
+    // Billing / subscription (Stripe).
+    plan: { type: String, enum: ["free", "plus", "pro"], default: "free" },
+    planStatus: { type: String, default: null }, // active | past_due | canceled | ...
+    planRenewsAt: { type: Date, default: null },
+    stripeCustomerId: { type: String, default: null, index: true, select: false },
+    stripeSubscriptionId: { type: String, default: null, select: false },
+
     loginAttempts: { type: Number, default: 0 },
     lockUntil: { type: Date, default: null },
 

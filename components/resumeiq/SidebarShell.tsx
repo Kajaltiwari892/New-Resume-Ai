@@ -25,6 +25,12 @@ const NAV_ITEMS = [
   { href: "/settings", icon: FiSettings, label: "Settings" },
 ] as const;
 
+function planLabel(plan?: string) {
+  if (plan === "pro") return "Pro plan";
+  if (plan === "plus") return "Plus plan";
+  return "Free plan";
+}
+
 function initialsOf(name: string, email: string) {
   const src = (name || email || "U").trim();
   return src
@@ -49,6 +55,7 @@ export default function SidebarShell({
   const router = useRouter();
   const pathname = usePathname();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const isPaid = user.plan === "plus" || user.plan === "pro";
 
   useEffect(() => {
     if (!mobileNavOpen) return;
@@ -122,15 +129,21 @@ export default function SidebarShell({
               ))}
             </nav>
             <div className="upgrade-card">
-              <b>Upgrade to Pro</b>
-              <p>Unlock unlimited AI rewrites and interview drills.</p>
-              <button>Upgrade</button>
+              <b>{isPaid ? "Your plan" : "Upgrade your plan"}</b>
+              <p>
+                {isPaid
+                  ? "Manage your subscription or switch tiers anytime."
+                  : "Unlock unlimited AI rewrites and interview drills."}
+              </p>
+              <button onClick={() => { setMobileNavOpen(false); router.push("/pricing"); }}>
+                {isPaid ? "Manage plan" : "See plans"}
+              </button>
             </div>
             <div className="profile-card">
               <span>{initialsOf(user.name, user.email)}</span>
               <div>
                 <b>{headerName}</b>
-                <small>Free plan</small>
+                <small>{planLabel(user.plan)}</small>
               </div>
               <button
                 type="button"
