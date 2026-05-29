@@ -179,7 +179,7 @@ export default function SettingsPage() {
   return (
     <SidebarShell user={user} subtitle="Profile & preferences" title="Settings">
       <motion.div
-        className="w-full max-w-3xl px-8 pb-16 pt-2"
+        className="w-full max-w-3xl px-4 pb-16 pt-2 sm:px-8"
         initial="hidden"
         animate="visible"
         variants={containerVariants}

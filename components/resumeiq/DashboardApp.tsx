@@ -735,6 +735,13 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
               aria-hidden
             />
           )}
+          {analysisSheetOpen && (
+            <div
+              className="analysis-sheet-backdrop"
+              onClick={() => setAnalysisSheetOpen(false)}
+              aria-hidden
+            />
+          )}
           <aside className="sidebar">
             <div className="sidebar-scroll">
               <div className="brand-mark">

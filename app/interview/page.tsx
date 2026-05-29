@@ -296,7 +296,7 @@ export default function InterviewPage() {
   return (
     <SidebarShell user={user} subtitle="Practice common questions" title="Interview Prep">
       <motion.div
-        className="w-full max-w-3xl px-8 pb-16 pt-2"
+        className="w-full max-w-3xl px-4 pb-16 pt-2 sm:px-8"
         initial="hidden"
         animate="visible"
         variants={containerVariants}
@@ -331,7 +331,7 @@ export default function InterviewPage() {
               a difficulty you control. Practice answering out loud, then come back for another set.
             </motion.p>
 
-            <motion.div variants={itemVariants} className="mb-6 flex flex-wrap items-end gap-3">
+            <motion.div variants={itemVariants} className="mb-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
               {/* Resume picker */}
               <div className="flex min-w-[220px] flex-1 flex-col gap-1.5">
                 <label className="text-xs font-semibold uppercase tracking-wider text-neutral-500">
