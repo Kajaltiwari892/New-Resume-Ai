@@ -517,11 +517,14 @@
   line-height: 1.08;
   letter-spacing: -0.025em;
   color: white;
-  margin: 0;
+  margin: 0 0 0.5rem;
 }
 
 .lp-title-grad {
   display: inline-block;
+  /* Extra line-height + padding so descenders (the "g") aren't clipped by background-clip: text */
+  line-height: 1.25;
+  padding-bottom: 0.14em;
   background: linear-gradient(90deg, #c4b5fd 0%, #67e8f9 40%, #f0abfc 70%, #c4b5fd 100%);
   background-size: 300% 100%;
   -webkit-background-clip: text;
@@ -853,6 +856,87 @@
     4px 4px 8px rgba(124, 58, 237, 0.08),
     0 0 25px rgba(139, 92, 246, 0.3),
     0 0 55px rgba(139, 92, 246, 0.12);
+}
+
+/* ─── Landing Page: tablet & mobile responsiveness ─────────────────────── */
+
+/* Tablet */
+@media (max-width: 900px) {
+  .lp-nav-wrap {
+    padding: 0.7rem 1rem;
+  }
+
+  .lp-nav {
+    width: 100%;
+    gap: 0.65rem;
+  }
+
+  .lp-hero {
+    padding: clamp(2.5rem, 7vw, 4rem) 1.5rem;
+    padding-top: calc(clamp(2.5rem, 7vw, 4rem) + 80px);
+  }
+}
+
+/* Mobile */
+@media (max-width: 600px) {
+  .lp-nav-wrap {
+    padding: 0.6rem 0.75rem;
+  }
+
+  .lp-nav {
+    gap: 0.4rem;
+    padding: 0.4rem 0.5rem 0.4rem 0.75rem;
+  }
+
+  .lp-brand {
+    font-size: 0.95rem;
+    gap: 0.4rem;
+  }
+
+  .lp-brand-icon {
+    width: 1.7rem;
+    height: 1.7rem;
+  }
+
+  .lp-nav-right {
+    gap: 0.3rem;
+  }
+
+  .lp-nav-signin {
+    padding: 0.4rem 0.5rem;
+    font-size: 0.82rem;
+  }
+
+  .lp-nav-get-started {
+    padding: 0.45rem 0.85rem;
+    font-size: 0.82rem;
+  }
+
+  .lp-hero {
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
+
+  .lp-hero-content {
+    gap: 1.1rem;
+  }
+
+  .lp-cta-row {
+    width: 100%;
+  }
+
+  .lp-cta-primary,
+  .lp-cta-ghost {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}
+
+/* Very narrow phones — drop the text "Sign in" link so the pill nav never crowds */
+@media (max-width: 400px) {
+  .lp-nav-signin {
+    display: none;
+  }
 }
 
 /* ─── End Landing Page ─────────────────────────────────────────────────── */
@@ -4340,6 +4424,37 @@ textarea:focus,
   gap: 0.35rem;
 }
 
+/* Upload card: tighter on phones (laptop/tablet untouched) */
+@media (max-width: 600px) {
+  .ob-stage {
+    padding: 1.25rem 0.85rem;
+    align-items: start;
+  }
+
+  .ob-card {
+    padding: 1.6rem 1.25rem;
+    gap: 1.15rem;
+  }
+
+  .ob-header h1 {
+    font-size: 1.35rem;
+  }
+
+  .ob-header p {
+    font-size: 0.86rem;
+  }
+
+  .ob-trust {
+    gap: 0.75rem 1rem;
+    font-size: 0.72rem;
+  }
+
+  .analyzing-back-btn {
+    top: 0.75rem;
+    left: 0.75rem;
+  }
+}
+
 /* ─── End Onboarding Card ────────────────────────────────────────────────── */
 
 /* ─── Auth v2 (Aceternity-style dark form) ───────────────────────────────── */
@@ -4461,6 +4576,28 @@ textarea:focus,
 
 .password-rules li.ok {
   color: #34d399;
+}
+
+/* Auth: tablet & mobile responsiveness (laptop view untouched) */
+@media (max-width: 600px) {
+  .auth-shell-v2 {
+    padding: 88px 0.75rem 2rem;
+  }
+
+  .auth-card-v2 {
+    width: 100%;
+    max-width: 440px;
+    padding: 1.75rem 1.25rem;
+    border-radius: 1.25rem;
+  }
+
+  .auth-card-v2 h2 {
+    font-size: 1.4rem;
+  }
+
+  .password-rules {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ─── End Auth v2 ────────────────────────────────────────────────────────── */
@@ -5729,6 +5866,46 @@ body:has(.dashboard) {
   .dashboard .sidebar {
     height: 100vh;
   }
+
+  /* Reserve the 56px occupied by the closed bottom-sheet bar so the resume
+     PDF iframe doesn't extend underneath it. Without this the iframe overlaps
+     the fixed sheet bar and swallows taps on the tabs / up-arrow toggle, so
+     the sheet never opens. This rule sits AFTER the viewport-lock block on
+     purpose — it must override its `padding-bottom: 0`. */
+  .dashboard .resume-workbench {
+    height: calc(100vh - 56px);
+    padding-bottom: 0;
+  }
+
+  /* Force the bottom sheet onto its own compositing layer above the iframe so
+     its toggle is always tappable, even while expanded. */
+  .dashboard .analysis-panel {
+    isolation: isolate;
+    z-index: 50;
+  }
+
+  /* Dim backdrop shown while the sheet is open. It sits above the PDF iframe
+     (so the PDF can't appear to shift or steal taps behind the sheet) and
+     below the sheet itself. Tapping it closes the sheet — standard modal
+     dismissal. Rendered only on mobile, where the panel is a bottom sheet. */
+  .analysis-sheet-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 46;
+    background: rgba(0, 0, 0, 0.55);
+    animation: fadeIn 0.2s ease;
+  }
+}
+
+/* The sheet backdrop only exists in the mobile bottom-sheet layout. On
+   laptop the analysis panel is a permanent column, so never dim/overlay. */
+.analysis-sheet-backdrop {
+  display: none;
+}
+@media (max-width: 1100px) {
+  .analysis-sheet-backdrop {
+    display: block;
+  }
 }
 /* ─── End viewport lock ──────────────────────────────────────────────────── */
 
@@ -6883,6 +7060,34 @@ body:has(.dashboard) {
   }
   .dashboard.sidebar-shell .resume-workbench.shell-main .topbar {
     padding: 0.85rem 1.25rem 0;
+  }
+
+  /* The viewport-lock rules (html/body/.dashboard => height:100vh; overflow:hidden)
+     exist for the real dashboard's 3 independent scroll columns. SidebarShell
+     pages (My Resumes, Interview, History, Settings) reuse the .dashboard class
+     but have a single long content column that must scroll the PAGE on mobile.
+     Without this override their content is clipped at 100vh and unreachable.
+     Scoped to .sidebar-shell so the real dashboard keeps its lock. */
+  html:has(.dashboard.sidebar-shell),
+  body:has(.dashboard.sidebar-shell) {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+  .app-shell:has(.dashboard.sidebar-shell) {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+    min-height: 100vh;
+  }
+  /* Sidebar is a slide-in drawer here too, so the single content column spans
+     full width and the page (not an inner column) scrolls. */
+  .dashboard.sidebar-shell {
+    grid-template-columns: 1fr;
+    height: auto;
+    max-height: none;
+    min-height: 100vh;
+    overflow: visible;
   }
 }
 
