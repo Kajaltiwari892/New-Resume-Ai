@@ -43,6 +43,7 @@ import {
 import { ToastStack, useToasts } from "./Toast";
 import { ApiError } from "@/lib/api";
 import { logout, type PublicUser } from "@/lib/authClient";
+import { verifyCheckout } from "@/lib/billingClient";
 import {
   analyzeResume,
   createResumeFromText,
@@ -228,6 +229,45 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
   const [accordion, setAccordion] = useState<string>("Behavioral");
   const [analysisSheetOpen, setAnalysisSheetOpen] = useState<boolean>(false);
   const [analysisCollapsed, setAnalysisCollapsed] = useState<boolean>(false);
+
+  // ---- billing / upgrade -----------------------------------------------
+  const [planOverride, setPlanOverride] = useState<"plus" | "pro" | null>(null);
+  const effectivePlan = planOverride ?? user.plan ?? "free";
+  const isPaid = effectivePlan === "plus" || effectivePlan === "pro";
+  const planLabel =
+    effectivePlan === "pro" ? "Pro plan" : effectivePlan === "plus" ? "Plus plan" : "Free plan";
+
+  // Returning from Stripe Checkout: confirm the session, apply the tier, toast.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get("session_id");
+    if (params.get("upgraded") !== "1" || !sessionId) return;
+    (async () => {
+      try {
+        const billing = await verifyCheckout(sessionId);
+        if (billing.plan === "plus" || billing.plan === "pro") {
+          setPlanOverride(billing.plan);
+          push({
+            kind: "success",
+            title: `Welcome to ${billing.plan === "pro" ? "Pro" : "Plus"} 🎉`,
+            message: "Your upgrade is active — enjoy the new features.",
+          });
+        }
+      } catch {
+        push({
+          kind: "warning",
+          title: "Payment received",
+          message: "It may take a moment to activate. Refresh if it doesn't show.",
+        });
+      } finally {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("upgraded");
+        url.searchParams.delete("session_id");
+        window.history.replaceState({}, "", url.pathname + url.search);
+      }
+    })();
+  }, [push]);
 
   // Live-rotating analyzing message.
   useEffect(() => {
@@ -788,15 +828,21 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
                 ))}
               </nav>
               <div className="upgrade-card">
-                <b>Upgrade to Pro</b>
-                <p>Unlock unlimited AI rewrites and interview drills.</p>
-                <button>Upgrade</button>
+                <b>{isPaid ? "Your plan" : "Upgrade your plan"}</b>
+                <p>
+                  {isPaid
+                    ? "Manage your subscription or switch tiers anytime."
+                    : "Unlock unlimited AI rewrites and interview drills."}
+                </p>
+                <button onClick={() => router.push("/pricing")}>
+                  {isPaid ? "Manage plan" : "See plans"}
+                </button>
               </div>
               <div className="profile-card">
                 <span>{headerInitials}</span>
                 <div>
                   <b>{headerName}</b>
-                  <small>Free plan</small>
+                  <small>{planLabel}</small>
                 </div>
                 <button
                   type="button"
