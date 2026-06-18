@@ -25,15 +25,141 @@ function countOccurrences(text, list) {
   return n;
 }
 
-function hasMetrics(text) {
-  return /(\d+%|\d+x|\$\d|\b(million|billion|k)\b|\b\d{2,}\b)/i.test(text);
-}
-
 function wordCount(text) {
   return (text || "").split(/\s+/).filter(Boolean).length;
 }
 
-export function analyzeResumeHeuristic(text, { targetRole } = {}) {
+function clamp(n, min, max) {
+  return Math.max(min, Math.min(max, n));
+}
+
+function pct(score, max) {
+  if (!max) return 0;
+  return clamp(Math.round((score / max) * 100), 0, 100);
+}
+
+function gradeFromScore(score) {
+  if (score >= 85) return "A";
+  if (score >= 72) return "B";
+  if (score >= 58) return "C";
+  if (score >= 42) return "D";
+  return "F";
+}
+
+function interviewRateFromScore(score) {
+  if (score >= 85) return "12-18%";
+  if (score >= 72) return "7-11%";
+  if (score >= 58) return "3-6%";
+  if (score >= 42) return "1-3%";
+  return "<1%";
+}
+
+function atsProbabilityFromScore(score) {
+  if (score >= 78) return "high";
+  if (score >= 55) return "medium";
+  return "low";
+}
+
+function hasMetric(text) {
+  return /(\d+(\.\d+)?\s?%|\d+(\.\d+)?\s?x|\$\s?\d|\b\d+(\.\d+)?\s?(k|m|b|million|billion|lakh|crore)\b|\b\d{2,}\b|\b\d+\s?(users|customers|clients|requests|tickets|projects|members|engineers|hours|days|weeks|months)\b)/i.test(text);
+}
+
+function hasMetrics(text) {
+  return hasMetric(text);
+}
+
+const STRONG_VERBS = [
+  "accelerated", "achieved", "architected", "automated", "built", "delivered",
+  "created", "collaborated", "designed", "developed", "deployed", "drove",
+  "engineered", "implemented", "improved", "increased", "integrated",
+  "launched", "led", "migrated", "optimized", "owned", "reduced",
+  "refactored", "scaled", "shipped", "spearheaded", "streamlined",
+];
+
+const WEAK_VERB_RE =
+  /^(worked|helped|assisted|responsible|participated|involved|contributed|handled|supported|used|utilized|learned|tried|made|did)\b/i;
+const PASSIVE_RE = /\b(was|were|is|are|been|being)\s+\w+ed\b/i;
+const CLICHE_RE =
+  /\b(passionate|hard[- ]?working|motivated|team player|detail[- ]?oriented|results[- ]?driven|self[- ]?starter|seeking|looking to leverage|go[- ]?getter|rockstar|ninja)\b/i;
+const RESPONSIBILITY_RE = /\b(responsible for|duties included|tasked with|worked on|helped with|participated in|involved in)\b/i;
+const CONTACT_RE = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
+const PHONE_RE = /(\+?\d[\d\s().-]{7,}\d)/;
+const LINKEDIN_RE = /\blinked\s?in\b|linkedin\.com|linkedin:/i;
+const GITHUB_RE = /\bgithub\b|github\.com|github:/i;
+const PORTFOLIO_RE = /\b(portfolio|behance|dribbble|figma|adobe portfolio|artstation|uxfolio|case study|case studies)\b/i;
+
+const ROLE_RUBRICS = {
+  tech: {
+    match: /\b(frontend|backend|full[- ]?stack|developer|engineer|software|react|node|java|python|javascript|typescript|devops)\b/i,
+    proofLabel: "GitHub or deployed portfolio",
+    proofRe: /\b(github|deployed|live|portfolio|vercel|netlify|render|app store|play store)\b/i,
+    keywords: ["react", "node", "typescript", "api", "database", "testing", "deployment", "security"],
+  },
+  design: {
+    match: /\b(graphic|visual|brand|ui\/ux|ux|product designer|designer|illustrator|photoshop|figma)\b/i,
+    proofLabel: "portfolio, Behance, Dribbble, or case-study link",
+    proofRe: PORTFOLIO_RE,
+    keywords: ["figma", "photoshop", "illustrator", "indesign", "branding", "typography", "layout", "campaign", "portfolio"],
+  },
+  data: {
+    match: /\b(data analyst|business analyst|analytics|power bi|tableau|sql|excel|python|dashboard|statistics)\b/i,
+    proofLabel: "dashboard, SQL, BI, or analytics project proof",
+    proofRe: /\b(sql|dashboard|power bi|tableau|excel|python|pandas|analytics|a\/b|kpi|forecast|visualization)\b/i,
+    keywords: ["sql", "excel", "python", "dashboard", "power bi", "tableau", "kpi", "analysis"],
+  },
+};
+
+function getRoleRubric(text, targetRole = "") {
+  const haystack = `${targetRole}\n${text}`;
+  if (ROLE_RUBRICS.design.match.test(haystack)) return { key: "design", ...ROLE_RUBRICS.design };
+  if (ROLE_RUBRICS.data.match.test(haystack)) return { key: "data", ...ROLE_RUBRICS.data };
+  if (ROLE_RUBRICS.tech.match.test(haystack)) return { key: "tech", ...ROLE_RUBRICS.tech };
+  return { key: "general", proofLabel: "portfolio or work sample link", proofRe: PORTFOLIO_RE, keywords: [] };
+}
+
+function hasSection(text, section) {
+  const re = new RegExp(`(^|\\n)\\s*${section.replace(/\s+/g, "\\s+")}\\s*:?\\s*(\\n|$)`, "i");
+  return re.test(text);
+}
+
+function hasAnySection(text, sections) {
+  return sections.some((section) => hasSection(text, section));
+}
+
+function extractBullets(text) {
+  const lines = String(text || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const bulletLines = [];
+  for (const line of lines) {
+    const bullet = line.match(/^(?:[-*]|\d+[.)]|\u2022|\u00b7|\u25cf|\u25aa)\s*(.+)$/);
+    if (bullet?.[1]) bulletLines.push(bullet[1].trim());
+  }
+  if (bulletLines.length) return bulletLines;
+
+  return lines.filter((line) => {
+    if (line.length < 25 || line.length > 240) return false;
+    if (/^(summary|objective|profile|experience|education|skills|projects|certifications)$/i.test(line)) return false;
+    return /[a-z]/i.test(line);
+  });
+}
+
+function firstWord(line) {
+  return (line.match(/[A-Za-z]+/)?.[0] || "").toLowerCase();
+}
+
+function issue({ severity = "Moderate", category, title, description, original = "", location = "" }) {
+  return {
+    severity,
+    category,
+    title,
+    description,
+    original_text: original,
+    location,
+    fix_instruction: description,
+    example_fix: "",
+  };
+}
+
+function analyzeResumeHeuristicLegacy(text, { targetRole } = {}) {
   const wc = wordCount(text);
   const impact = countOccurrences(text, IMPACT_VERBS);
   const leadership = countOccurrences(text, LEADERSHIP_KEYWORDS);
@@ -99,6 +225,332 @@ export function analyzeResumeHeuristic(text, { targetRole } = {}) {
   if (wins.length === 0) wins.push("Clear foundation to build on");
 
   return { overallScore, bars, issues, wins };
+}
+
+export function analyzeResumeHeuristic(text, { targetRole } = {}) {
+  const wc = wordCount(text);
+  const raw = String(text || "");
+  const roleRubric = getRoleRubric(raw, targetRole);
+  const bullets = extractBullets(raw);
+  const bulletCount = bullets.length;
+  const metricBullets = bullets.filter(hasMetric).length;
+  const metricCount = (raw.match(/\d+/g) || []).length;
+  const weakBullets = bullets.filter((line) => WEAK_VERB_RE.test(line) || RESPONSIBILITY_RE.test(line));
+  const passiveBullets = bullets.filter((line) => PASSIVE_RE.test(line));
+  const strongStarts = bullets.filter((line) => STRONG_VERBS.includes(firstWord(line)));
+  const tooShort = bullets.filter((line) => wordCount(line) < 8);
+  const tooLong = bullets.filter((line) => wordCount(line) > 35);
+  const repeatedStarts = new Map();
+
+  for (const line of bullets) {
+    const w = firstWord(line);
+    if (w) repeatedStarts.set(w, (repeatedStarts.get(w) || 0) + 1);
+  }
+
+  const repeatedVerbPenalty = [...repeatedStarts.values()].filter((n) => n > 2).length;
+  const sectionCount = ATS_FRIENDLY_SECTIONS.filter((s) => hasSection(raw, s)).length;
+  const hasExperience = hasAnySection(raw, ["experience", "work experience", "professional experience", "employment history"]);
+  const hasEducation = hasSection(raw, "education");
+  const hasSkills = hasAnySection(raw, ["skills", "technical skills", "core skills"]);
+  const hasSummary = hasAnySection(raw, ["summary", "profile", "objective"]);
+  const hasProjects = hasAnySection(raw, ["projects", "project"]);
+  const hasEmail = CONTACT_RE.test(raw);
+  const hasPhone = PHONE_RE.test(raw);
+  const hasLinkedIn = LINKEDIN_RE.test(raw);
+  const hasGithub = GITHUB_RE.test(raw);
+  const hasPortfolio = PORTFOLIO_RE.test(raw);
+  const hasRoleProof = roleRubric.proofRe.test(raw) || (roleRubric.key === "tech" && hasGithub);
+  const hasDates = /\b(19|20)\d{2}\b/.test(raw);
+  const hasLocation = /\b(remote|hybrid|onsite|india|usa|united states|canada|uk|london|new york|delhi|mumbai|bangalore|bengaluru|pune|hyderabad)\b/i.test(raw);
+  const hasFirstPerson = /\b(i|me|my|mine|we|our)\b/i.test(raw);
+  const hasReferences = /\breferences available\b|\breferences\b/i.test(raw);
+  const hasCliche = CLICHE_RE.test(raw);
+  const targetWords = targetRole ? String(targetRole).toLowerCase().split(/\s+/).filter((w) => w.length > 2) : [];
+  const targetHits = targetWords.length ? countOccurrences(raw, targetWords) : 0;
+  const roleKeywordHits = countOccurrences(raw, roleRubric.keywords || []);
+  const leadership = countOccurrences(raw, LEADERSHIP_KEYWORDS);
+  const scopeSignals = countOccurrences(raw, [
+    "cross-functional", "stakeholder", "owned", "ownership", "mentor", "mentored",
+    "reviewed", "roadmap", "strategy", "team", "led", "collaborated", "end-to-end",
+    "architecture", "production", "scale", "users", "revenue",
+  ]);
+
+  const metricRatio = bulletCount ? metricBullets / bulletCount : 0;
+  const strongRatio = bulletCount ? strongStarts.length / bulletCount : 0;
+  const weakRatio = bulletCount ? weakBullets.length / bulletCount : 0;
+
+  const impactScore = clamp(Math.round(metricRatio * 18) + Math.min(7, metricCount), 0, 25);
+  const actionVerbScore = clamp(
+    Math.round(strongRatio * 10) + Math.min(5, new Set(strongStarts.map(firstWord)).size) -
+      weakBullets.length * 2 -
+      passiveBullets.length -
+      repeatedVerbPenalty * 2,
+    0,
+    15,
+  );
+  const bulletQualityScore = clamp(
+    15 -
+      tooShort.length * 2 -
+      tooLong.length * 2 -
+      weakBullets.length -
+      passiveBullets.length -
+      (bulletCount < 4 ? 4 : 0) -
+      (metricRatio < 0.35 ? 3 : 0),
+    0,
+    15,
+  );
+  const atsScore = clamp(
+    sectionCount * 2 +
+      (hasEmail ? 1 : 0) +
+      (hasPhone ? 1 : 0) +
+      (hasLinkedIn ? 2 : 0) +
+      (hasGithub || hasPortfolio || hasRoleProof ? 1 : 0) +
+      (hasDates ? 2 : 0) +
+      (hasLocation ? 1 : 0) +
+      (targetHits ? 2 : 0) +
+      (roleKeywordHits >= 3 ? 1 : 0),
+    0,
+    15,
+  );
+  const leadershipScore = clamp(Math.min(10, scopeSignals + Math.floor(leadership / 2)), 0, 10);
+  const formattingScore = clamp(
+    10 -
+      (wc < 120 ? 3 : wc < 180 ? 1 : 0) -
+      (wc > 1000 ? 2 : 0) -
+      (sectionCount < 3 ? 3 : 0) -
+      (!hasDates ? 2 : 0) -
+      (hasFirstPerson ? 2 : 0) -
+      (hasReferences ? 2 : 0),
+    0,
+    10,
+  );
+  const summaryScore = clamp(
+    (hasSummary ? 3 : 0) +
+      (!hasCliche && hasSummary ? 1 : 0) +
+      (hasSummary && hasMetric(raw.slice(0, 700)) ? 1 : 0) -
+      (hasFirstPerson ? 1 : 0),
+    0,
+    5,
+  );
+  const projectsScore = clamp(
+    (hasProjects ? 2 : 0) +
+      (hasGithub || hasPortfolio || hasRoleProof ? 1 : 0) +
+      (hasProjects && hasMetric(raw) ? 1 : 0) +
+      (hasProjects && /\b(api|database|cloud|production|deployed|users|performance|latency|scale|dashboard|brand|campaign|case study|visualization)\b/i.test(raw) ? 1 : 0),
+    0,
+    5,
+  );
+
+  const dimensionScores = {
+    impact_quantification: { score: impactScore, max: 25 },
+    action_verbs: { score: actionVerbScore, max: 15 },
+    bullet_quality: { score: bulletQualityScore, max: 15 },
+    ats_keywords: { score: atsScore, max: 15 },
+    leadership_scope: { score: leadershipScore, max: 10 },
+    formatting: { score: formattingScore, max: 10 },
+    summary: { score: summaryScore, max: 5 },
+    projects: { score: projectsScore, max: 5 },
+  };
+
+  let overallScore =
+    impactScore +
+    actionVerbScore +
+    bulletQualityScore +
+    atsScore +
+    leadershipScore +
+    formattingScore +
+    summaryScore +
+    projectsScore;
+
+  const caps = [];
+  if (bulletCount < 3) caps.push(55);
+  if (!hasExperience) caps.push(65);
+  if (!hasEducation || !hasSkills) caps.push(78);
+  if (!hasEmail && !hasPhone) caps.push(70);
+  if (metricRatio === 0) caps.push(65);
+  else if (metricRatio < 0.25) caps.push(76);
+  else if (metricRatio < 0.5) caps.push(88);
+  if (weakRatio >= 0.35) caps.push(76);
+  if (sectionCount < 3) caps.push(75);
+  if (wc < 120) caps.push(62);
+  else if (wc < 180) caps.push(76);
+  if (wc > 1200) caps.push(76);
+  if (hasCliche) caps.push(82);
+  if (hasFirstPerson) caps.push(80);
+  if (hasReferences) caps.push(78);
+  overallScore = clamp(Math.min(overallScore, ...caps, 100), 0, 100);
+
+  const bars = [
+    { key: "impact", label: "Impact & Metrics", value: pct(impactScore, 25) },
+    { key: "verb", label: "Action Verbs", value: pct(actionVerbScore, 15) },
+    { key: "bullet", label: "Bullet Quality", value: pct(bulletQualityScore, 15) },
+    { key: "ats", label: "ATS Keywords", value: pct(atsScore, 15) },
+    { key: "leadership", label: "Leadership", value: pct(leadershipScore, 10) },
+    { key: "formatting", label: "Formatting", value: pct(formattingScore, 10) },
+    { key: "summary", label: "Summary", value: pct(summaryScore, 5) },
+    { key: "projects", label: "Projects", value: pct(projectsScore, 5) },
+  ];
+
+  const issues = [];
+  if (metricRatio === 0) {
+    issues.push(issue({
+      severity: "Critical",
+      category: "impact",
+      title: "No quantified achievement bullets",
+      description: "Recruiter-grade resumes need numbers in the experience bullets: percentage, revenue, time saved, scale, users, or volume.",
+    }));
+  } else if (metricRatio < 0.5) {
+    issues.push(issue({
+      severity: "Critical",
+      category: "impact",
+      title: "Too few bullets prove measurable impact",
+      description: `Only ${metricBullets}/${bulletCount} achievement lines include metrics. Aim for at least half.`,
+    }));
+  }
+  if (weakBullets.length) {
+    issues.push(issue({
+      severity: "Moderate",
+      category: "verb",
+      title: "Weak responsibility-led bullets",
+      description: "Replace phrases like worked on, helped, responsible for, and used with ownership verbs plus the outcome.",
+      original: weakBullets[0],
+      location: "Experience",
+    }));
+  }
+  if (strongRatio < 0.5) {
+    issues.push(issue({
+      severity: "Moderate",
+      category: "verb",
+      title: "Not enough bullets start with strong action verbs",
+      description: "Most bullets should begin with verbs like Built, Led, Shipped, Reduced, Automated, Optimized, or Launched.",
+    }));
+  }
+  if (tooLong.length) {
+    issues.push(issue({
+      severity: "Moderate",
+      category: "structure",
+      title: "Bullets are too long for fast recruiter scanning",
+      description: "Keep bullets under 30-35 words and lead with the result.",
+      original: tooLong[0],
+      location: "Experience",
+    }));
+  }
+  if (!hasLinkedIn) {
+    issues.push(issue({
+      severity: "Minor",
+      category: "ats",
+      title: "Missing LinkedIn profile",
+      description: "Add a clean LinkedIn URL in the header so recruiters can verify your profile quickly.",
+    }));
+  }
+  if (!hasRoleProof && roleRubric.key !== "general") {
+    issues.push(issue({
+      severity: "Minor",
+      category: "ats",
+      title: `Missing ${roleRubric.proofLabel}`,
+      description:
+        roleRubric.key === "design"
+          ? "Design resumes need visible proof: portfolio, Behance, Dribbble, Figma case studies, or campaign samples."
+          : roleRubric.key === "data"
+            ? "Data resumes need visible proof: dashboards, SQL/BI projects, analytics case studies, or quantified business insights."
+            : "Technical resumes are stronger when projects link to GitHub, portfolio, or deployed work.",
+    }));
+  }
+  if (leadershipScore < 4) {
+    issues.push(issue({
+      severity: "Moderate",
+      category: "leadership",
+      title: "Missing scope and ownership signals",
+      description: "Add team size, stakeholders, ownership, production impact, architecture, roadmap, or mentoring context where true.",
+    }));
+  }
+  if (hasCliche) {
+    issues.push(issue({
+      severity: "Moderate",
+      category: "summary",
+      title: "Generic summary language",
+      description: "Remove cliches like passionate, hardworking, motivated, or team player. Replace them with role, scope, and proof.",
+    }));
+  }
+  if (wc < 120) {
+    issues.push(issue({
+      severity: "Critical",
+      category: "formatting",
+      title: "Resume is too thin to score strongly",
+      description: "Add more achievement bullets, technologies used in context, projects, scope, and quantified outcomes.",
+    }));
+  }
+  if (!hasExperience || !hasEducation || !hasSkills) {
+    issues.push(issue({
+      severity: "Critical",
+      category: "ats",
+      title: "Missing core ATS sections",
+      description: "A strong ATS resume should clearly label Experience, Skills, and Education sections.",
+    }));
+  }
+
+  const wins = [];
+  if (metricRatio >= 0.5) wins.push("Several bullets include quantified outcomes");
+  if (strongRatio >= 0.6) wins.push("Strong action verbs are visible");
+  if (sectionCount >= 4) wins.push("Core ATS sections are present");
+  if (leadershipScore >= 7) wins.push("Good ownership and scope signals");
+  if (wins.length === 0) wins.push("Readable foundation, but it needs stronger proof and stricter resume positioning");
+
+  const positives = wins.map((title) => ({ title, description: "" }));
+  const top3Priorities = issues.slice(0, 3).map((item) => item.title);
+  const interviewRedFlags = issues
+    .filter((item) => item.severity === "Critical")
+    .slice(0, 4)
+    .map((item) => item.title);
+
+  return {
+    overallScore,
+    grade: gradeFromScore(overallScore),
+    verdict:
+      overallScore >= 85
+        ? "Strong resume, but keep pressure-testing every bullet for measurable business impact."
+        : overallScore >= 70
+          ? "Good base, but not yet elite. The resume needs more proof, sharper bullets, and stronger ATS signals."
+          : overallScore >= 55
+            ? "Average resume. It may pass basic screening, but recruiters will likely skip it unless impact and keywords improve."
+            : "Weak resume by recruiter standards. Fix metrics, bullet quality, core sections, and role-specific proof before applying.",
+    bars,
+    issues: issues.slice(0, 14),
+    wins,
+    dimensionScores,
+    positives,
+    top3Priorities,
+    interviewRedFlags,
+    atsPassProbability: atsProbabilityFromScore(overallScore),
+    estimatedInterviewRate: interviewRateFromScore(overallScore),
+  };
+}
+
+export function applyStrictScoringGuardrails(result, text, opts = {}) {
+  const strict = analyzeResumeHeuristic(text, opts);
+  const incomingScore = Number.isFinite(result?.overallScore) ? result.overallScore : 100;
+  const overallScore = Math.min(incomingScore, strict.overallScore);
+  const mergedIssues = [...strict.issues, ...(result?.issues || [])].slice(0, 18);
+  const top3Priorities = [
+    ...strict.top3Priorities,
+    ...((result?.top3Priorities || []).filter((item) => !strict.top3Priorities.includes(item))),
+  ].slice(0, 3);
+
+  return {
+    ...result,
+    overallScore,
+    grade: gradeFromScore(overallScore),
+    verdict: strict.verdict,
+    bars: strict.bars,
+    issues: mergedIssues,
+    wins: strict.wins,
+    dimensionScores: strict.dimensionScores,
+    positives: strict.positives,
+    top3Priorities,
+    interviewRedFlags: strict.interviewRedFlags,
+    atsPassProbability: atsProbabilityFromScore(overallScore),
+    estimatedInterviewRate: interviewRateFromScore(overallScore),
+  };
 }
 
 export function generateSuggestionsHeuristic(resume) {

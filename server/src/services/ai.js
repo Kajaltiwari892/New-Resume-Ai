@@ -1,6 +1,7 @@
 import { env } from "../config/env.js";
 import {
   analyzeResumeHeuristic,
+  applyStrictScoringGuardrails,
   generateSuggestionsHeuristic,
   generateInterviewQuestionsHeuristic,
   matchKeywordsHeuristic,
@@ -313,7 +314,6 @@ export async function analyzeResume(text, opts = {}) {
     const issues = (result.issues || []).map((issue) => ({
       severity: capitalize(issue.severity), // Critical | Moderate | Minor
       title: issue.title,
-      body: issue.description,
       id: issue.id,
       category: issue.category,
       description: issue.description,
@@ -323,7 +323,7 @@ export async function analyzeResume(text, opts = {}) {
       example_fix: issue.example_fix,
     }));
 
-    return {
+    return applyStrictScoringGuardrails({
       overallScore: result.overall_score,
       grade: result.grade,
       verdict: result.verdict,
@@ -336,7 +336,7 @@ export async function analyzeResume(text, opts = {}) {
       interviewRedFlags: result.interview_red_flags || [],
       atsPassProbability: result.ats_pass_probability,
       estimatedInterviewRate: result.estimated_interview_rate,
-    };
+    }, text, opts);
   } catch (e) {
     console.warn("[ai] analyze fallback:", e.message);
     return analyzeResumeHeuristic(text, opts);
