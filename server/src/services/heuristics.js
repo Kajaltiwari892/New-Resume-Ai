@@ -91,21 +91,30 @@ const PORTFOLIO_RE = /\b(portfolio|behance|dribbble|figma|adobe portfolio|artsta
 const ROLE_RUBRICS = {
   tech: {
     match: /\b(frontend|backend|full[- ]?stack|developer|engineer|software|react|node|java|python|javascript|typescript|devops)\b/i,
+    label: "Software / Engineering",
     proofLabel: "GitHub or deployed portfolio",
     proofRe: /\b(github|deployed|live|portfolio|vercel|netlify|render|app store|play store)\b/i,
     keywords: ["react", "node", "typescript", "api", "database", "testing", "deployment", "security"],
+    strongSignals: ["deployed systems", "performance metrics", "secure APIs", "tests", "production scale"],
+    weakSignals: ["no GitHub/deployed proof", "tool list without project evidence", "no performance or reliability metric"],
   },
   design: {
     match: /\b(graphic|visual|brand|ui\/ux|ux|product designer|designer|illustrator|photoshop|figma)\b/i,
+    label: "Design / Creative",
     proofLabel: "portfolio, Behance, Dribbble, or case-study link",
     proofRe: PORTFOLIO_RE,
     keywords: ["figma", "photoshop", "illustrator", "indesign", "branding", "typography", "layout", "campaign", "portfolio"],
+    strongSignals: ["portfolio proof", "case studies", "brand systems", "campaign outcomes", "tool fluency"],
+    weakSignals: ["no portfolio", "only tools listed", "no client/campaign impact", "no visual case-study context"],
   },
   data: {
     match: /\b(data analyst|business analyst|analytics|power bi|tableau|sql|excel|python|dashboard|statistics)\b/i,
+    label: "Data / Analytics",
     proofLabel: "dashboard, SQL, BI, or analytics project proof",
     proofRe: /\b(sql|dashboard|power bi|tableau|excel|python|pandas|analytics|a\/b|kpi|forecast|visualization)\b/i,
     keywords: ["sql", "excel", "python", "dashboard", "power bi", "tableau", "kpi", "analysis"],
+    strongSignals: ["SQL proof", "dashboard/project proof", "business KPI movement", "stakeholder insights", "data cleaning"],
+    weakSignals: ["no dashboard", "no SQL/BI proof", "no business decision impact", "only coursework tools"],
   },
 };
 
@@ -114,7 +123,32 @@ function getRoleRubric(text, targetRole = "") {
   if (ROLE_RUBRICS.design.match.test(haystack)) return { key: "design", ...ROLE_RUBRICS.design };
   if (ROLE_RUBRICS.data.match.test(haystack)) return { key: "data", ...ROLE_RUBRICS.data };
   if (ROLE_RUBRICS.tech.match.test(haystack)) return { key: "tech", ...ROLE_RUBRICS.tech };
-  return { key: "general", proofLabel: "portfolio or work sample link", proofRe: PORTFOLIO_RE, keywords: [] };
+  return { key: "general", label: "General", proofLabel: "portfolio or work sample link", proofRe: PORTFOLIO_RE, keywords: [] };
+}
+
+const UNIVERSAL_RUBRIC = [
+  "Clear target role and recruiter-readable summary",
+  "Core ATS sections: Experience, Skills, Education, Projects/Portfolio when relevant",
+  "Achievement bullets with action, scope, method, and measurable result",
+  "Role keywords backed by work/project evidence, not only a skills list",
+  "Proof links recruiters can open: LinkedIn plus GitHub, portfolio, dashboards, or case studies as role-appropriate",
+  "Concise formatting, consistent dates, no first-person filler, no references section",
+];
+
+export function retrieveResumeRubric(text, opts = {}) {
+  const role = getRoleRubric(text, opts.targetRole);
+  return {
+    role,
+    universal: UNIVERSAL_RUBRIC,
+    checks: [
+      ...UNIVERSAL_RUBRIC,
+      `Role family: ${role.label || "General"}`,
+      `Required proof: ${role.proofLabel}`,
+      `Important role keywords: ${(role.keywords || []).join(", ") || "target-role keywords from the job description"}`,
+      `Strong signals: ${(role.strongSignals || []).join(", ") || "measurable outcomes and proof of work"}`,
+      `Weak signals: ${(role.weakSignals || []).join(", ") || "generic claims without evidence"}`,
+    ],
+  };
 }
 
 function hasSection(text, section) {
@@ -380,6 +414,16 @@ export function analyzeResumeHeuristic(text, { targetRole } = {}) {
   if (hasReferences) caps.push(78);
   overallScore = clamp(Math.min(overallScore, ...caps, 100), 0, 100);
 
+  const hasCoreResumeShape = hasExperience && hasEducation && hasSkills;
+  const hasSomeProof = hasLinkedIn || hasRoleProof || hasProjects;
+  const calibrationLift =
+    (hasCoreResumeShape ? 4 : 0) +
+    (hasSomeProof ? 3 : 0) +
+    (metricRatio >= 0.25 ? 5 : metricRatio > 0 ? 2 : 0) +
+    (strongRatio >= 0.35 ? 4 : 0) +
+    (roleKeywordHits >= 3 ? 3 : 0);
+  overallScore = clamp(Math.min(overallScore + calibrationLift, ...caps, 100), 0, 100);
+
   const bars = [
     { key: "impact", label: "Impact & Metrics", value: pct(impactScore, 25) },
     { key: "verb", label: "Action Verbs", value: pct(actionVerbScore, 15) },
@@ -567,6 +611,8 @@ export function generateSuggestionsHeuristic(resume) {
   const summary = resume.sections.summary || "";
   const skills = resume.sections.skills || "";
   const education = resume.sections.education || "";
+  const resumeText = [summary, exp, skills, education].filter(Boolean).join("\n\n");
+  const roleRubric = getRoleRubric(resumeText);
 
   // ---- Experience: per-line scan ---------------------------------------
   const expLines = exp.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
@@ -617,7 +663,7 @@ export function generateSuggestionsHeuristic(resume) {
   const buzzwordRe = /\b(team player|hard[- ]?working|detail[- ]?oriented|go[- ]?getter|synergy|results[- ]?driven|self[- ]?starter|think outside the box|out of the box|guru|rockstar|ninja|wheelhouse)\b/gi;
 
   for (const line of expLines) {
-    if (out.length >= 8) break;
+    if (out.length >= 16) break;
 
     // Weak verbs
     for (const { re, rewrite } of weakVerbRules) {
@@ -753,6 +799,39 @@ export function generateSuggestionsHeuristic(resume) {
     });
   }
 
+  if (!roleRubric.proofRe.test(resumeText)) {
+    push({
+      section: "summary",
+      old: summary || "",
+      next: `Add visible role proof near the header or projects section: ${roleRubric.proofLabel}. Recruiters expect this for ${roleRubric.label || "this role"} resumes.`,
+      reason: `Missing role-specific proof: ${roleRubric.proofLabel}.`,
+    });
+  }
+
+  const roleKeywordMissing = (roleRubric.keywords || [])
+    .filter((keyword) => !new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}\\b`, "i").test(resumeText))
+    .slice(0, 5);
+  if (roleKeywordMissing.length) {
+    push({
+      section: "skills",
+      old: skills || "",
+      next: `Add only truthful role-relevant keywords and prove them in project bullets: ${roleKeywordMissing.join(", ")}.`,
+      reason: `Missing ${roleRubric.label || "role"} keywords that recruiters often scan for.`,
+    });
+  }
+
+  for (const line of expLines) {
+    if (out.length >= 20) break;
+    if (line.length > 45 && !/\b(because|result|reduced|increased|improved|saving|saved|lowering|raising|grew|growth|conversion|latency|revenue|users)\b/i.test(line)) {
+      push({
+        section: "experience",
+        old: line,
+        next: `${line.replace(/[.\s]+$/, "")} — add the business/user outcome this work created.`,
+        reason: "The bullet describes work but not the result a recruiter can value.",
+      });
+    }
+  }
+
   // ---- Education -------------------------------------------------------
   if (education) {
     if (!/\b(19|20)\d{2}\b/.test(education)) {
@@ -777,7 +856,7 @@ export function generateSuggestionsHeuristic(resume) {
     });
   }
 
-  return out.slice(0, 10);
+  return out.slice(0, 20);
 }
 
 const QUESTION_POOL = {
