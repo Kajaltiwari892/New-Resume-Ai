@@ -2,6 +2,7 @@ import { env } from "../config/env.js";
 import {
   analyzeResumeHeuristic,
   applyStrictScoringGuardrails,
+  retrieveResumeRubric,
   generateSuggestionsHeuristic,
   generateInterviewQuestionsHeuristic,
   matchKeywordsHeuristic,
@@ -290,9 +291,14 @@ export async function analyzeResume(text, opts = {}) {
       ],
     };
 
+    const rubric = retrieveResumeRubric(text, opts);
     const result = await callGeminiJson({
-      system: FAANG_SYSTEM_PROMPT,
-      user: `Target role: ${opts.targetRole || "(unspecified)"}\n\nRESUME TEXT:\n${text}`,
+      system: `${FAANG_SYSTEM_PROMPT}
+
+Use the retrieved rubric below instead of assuming every resume is software-only.
+Retrieved rubric:
+${rubric.checks.map((item) => `- ${item}`).join("\n")}`,
+      user: `Target role: ${opts.targetRole || "(unspecified)"}\nDetected role family: ${rubric.role.label}\n\nRESUME TEXT:\n${text}`,
       schema,
       maxOutputTokens: 4096,
     });
@@ -375,9 +381,16 @@ export async function generateSuggestions(resume, _analysis) {
       required: ["suggestions"],
     };
     const sections = resume.sections;
-    const systemPrompt = `You are a brutally honest elite resume coach trained on FAANG, McKinsey, and Fortune 500 hiring standards.
+    const resumeText = [sections.summary, sections.experience, sections.skills, sections.education]
+      .filter(Boolean)
+      .join("\n\n");
+    const rubric = retrieveResumeRubric(resumeText, {});
+    const systemPrompt = `You are a senior resume coach trained on FAANG, McKinsey, top startups, design teams, data teams, and Fortune 500 hiring standards.
 
-Your job: scan EVERY SINGLE bullet point and line of this resume. Return a JSON object with a "suggestions" array containing 10 to 15 items minimum.
+Your job: scan EVERY SINGLE bullet point and line of this resume. Return a JSON object with a "suggestions" array containing as many high-value suggestions as the resume needs, usually 12 to 20 items.
+
+Use this retrieved role rubric:
+${rubric.checks.map((item) => `- ${item}`).join("\n")}
 
 CRITERIA — check every bullet against ALL of these:
 
@@ -402,7 +415,7 @@ CRITERIA — check every bullet against ALL of these:
 8. SKILLS CONTEXT: Skills listed but never demonstrated in experience bullets? → Flag and suggest adding context.
 
 MANDATORY RULES:
-- The "suggestions" array MUST contain at least 10 items. Aim for 12-15.
+- The "suggestions" array MUST contain at least 10 items when there are enough issues. Aim for 12-20.
 - "old": copy the EXACT original text from the resume, word for word.
 - "next": write the COMPLETE improved replacement — a real rewritten sentence, not advice.
 - "reason": name the specific criterion that failed (e.g. "Criterion 1: No metric — 'significantly' is vague").

@@ -1527,6 +1527,14 @@ button {
   font-weight: 850;
 }
 
+/* Scanning / analyzing overlay: calmer heading, not shouty. */
+.loader-card h1 {
+  font-size: clamp(1.25rem, 2.4vw, 1.6rem);
+  line-height: 1.2;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
 .wizard-content p,
 .loader-card p,
 .download-settings p,

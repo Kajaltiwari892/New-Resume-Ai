@@ -37,7 +37,6 @@ import { fetchResumeFileBlob } from "@/lib/resumeClient";
 import { FileSearch } from "lucide-react";
 import { Icon, type IconName } from "./Icon";
 import {
-  analyzingMessages,
   questionGroupOrder,
 } from "./data";
 import { ToastStack, useToasts } from "./Toast";
@@ -191,7 +190,6 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
   const [mode, setMode] = useState<Mode>("upload");
   const [booting, setBooting] = useState(true);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [messageIndex, setMessageIndex] = useState(0);
 
   // ---- profile snapshot (read-only here; editing lives in /onboarding) -
   const [fullName, setFullName] = useState("");
@@ -268,15 +266,6 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
       }
     })();
   }, [push]);
-
-  // Live-rotating analyzing message.
-  useEffect(() => {
-    if (mode !== "analyzing") return;
-    const timer = window.setInterval(() => {
-      setMessageIndex((i) => (i + 1) % analyzingMessages.length);
-    }, 950);
-    return () => window.clearInterval(timer);
-  }, [mode]);
 
   // Close mobile drawer on Esc; lock body scroll while open.
   useEffect(() => {
@@ -753,11 +742,9 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
           </div>
           <div className="loader-card glass-panel">
             <Icon name="brain" />
-            <h1>AI is analyzing your resume...</h1>
-            <p>{analyzingMessages[messageIndex]}</p>
-            <div className="skeleton-stack">
-              <span />
-              <span />
+            <h1>Analyzing your resume</h1>
+            <p>This usually takes a few seconds.</p>
+            <div className="analysis-progress" aria-hidden>
               <span />
             </div>
           </div>
@@ -1014,7 +1001,10 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
                         </div>
                         <b className="issue-title">{issue.title}</b>
                         {issue.location && <small className="issue-location">📍 {issue.location}</small>}
-                        <p className="issue-description">{issue.description || issue.body}</p>
+                        {(() => {
+                          const description = (issue.description || issue.body || "").trim();
+                          return description ? <p className="issue-description">{description}</p> : null;
+                        })()}
                         {issue.original_text && (
                           <div className="issue-original">
                             <span>Original:</span>
@@ -1027,9 +1017,18 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
                             <q>{issue.example_fix}</q>
                           </div>
                         )}
-                        {issue.fix_instruction && (
-                          <p className="issue-instruction">💡 {issue.fix_instruction}</p>
-                        )}
+                        {(() => {
+                          const description = (issue.description || issue.body || "").trim();
+                          const instruction = (issue.fix_instruction || "").trim();
+                          const nd = description.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+                          const ni = instruction.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+                          // Hide the fix instruction when it's effectively the same
+                          // text as the description (exact, or one contains the other).
+                          const duplicate = !ni || ni === nd || nd.includes(ni) || ni.includes(nd);
+                          return instruction && !duplicate
+                            ? <p className="issue-instruction">{instruction}</p>
+                            : null;
+                        })()}
                       </div>
                     ))}
 
@@ -1155,7 +1154,7 @@ export default function DashboardApp({ user }: { user: PublicUser }) {
               <div className="tab-panel">
                 {suggestionsLoading && !suggestions.length && (
                   <div className="empty-panel">
-                    <p>Scanning every bullet against FAANG standards…</p>
+                    <p>Generating suggestions…</p>
                   </div>
                 )}
                 {!suggestionsLoading && !suggestions.length && (
